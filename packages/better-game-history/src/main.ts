@@ -253,7 +253,14 @@ startUserscript({
               startHydration(generation, controller.signal);
             },
           });
-          context.log(`feed sync added ${result.added} games across ${result.pages} page(s)`);
+          const feedStatus = result.targetReached
+            ? "target reached"
+            : result.exhausted
+              ? "feed exhausted"
+              : result.stopReason;
+          context.log(
+            `feed sync added ${result.added} games across ${result.pages} page(s); ${result.total}/${result.target} stored; ${feedStatus}`,
+          );
         } catch (error) {
           if (!(error instanceof DOMException && error.name === "AbortError")) {
             context.log("feed sync stopped", error);

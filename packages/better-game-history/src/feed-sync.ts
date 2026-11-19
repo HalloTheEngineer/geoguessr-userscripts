@@ -13,6 +13,22 @@ interface FeedPayload {
   [key: string]: unknown;
 }
 
+interface FeedActivity {
+  type?: unknown;
+  time?: string;
+  payload?: unknown;
+  gameId?: string;
+  [key: string]: unknown;
+}
+
+export type FeedStopReason =
+  | "target"
+  | "known-frontier"
+  | "exhausted"
+  | "empty"
+  | "repeated-token"
+  | "page-limit";
+
 export interface FeedSyncOptions {
   userId: string;
   repository: HistoryRepository;
@@ -25,26 +41,30 @@ export interface FeedSyncOptions {
 export interface FeedSyncResult {
   added: number;
   pages: number;
+  total: number;
+  target: number;
+  targetReached: boolean;
+  exhausted: boolean;
+  stopReason: FeedStopReason;
 }
 
-const MAX_PAGES = 100;
+const MAX_PAGES = 1000;
 const PAGE_SIZE = 50;
 
-function parsePayload(value: unknown): FeedPayload | null {
-  if (!value) return null;
-  if (typeof value === "object") return value as FeedPayload;
-  if (typeof value !== "string") return null;
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as FeedPayload) : null;
+    return JSON.parse(value) as unknown;
   } catch {
     return null;
   }
 }
 
-function isDuelType(value: unknown): boolean {
-  const type = typeof value === "number" ? value : Number(value);
-  return type === 6 || type === 11;
+function parsePayload(value: unknown): FeedPayload | null {
+  const parsed = parseJsonValue(value);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as FeedPayload)
+    : null;
 }
 
 function payloadToRecord(
@@ -81,48 +101,122 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
   const { userId, repository, limit, targetGames, signal, onUpdate } = options;
   const target = Math.max(1, Math.min(Math.floor(targetGames), Math.floor(limit)));
   const known = new Set(repository.get(userId, limit).map((record) => record.gameId));
+  const backfill = known.size < target;
+  let encounteredKnown = false;
   const seenTokens = new Set<string>();
-  const maxPages = Math.min(MAX_PAGES, Math.max(1, Math.ceil(target / PAGE_SIZE) + 10));
+  const maxPages = Math.max(50, Math.min(MAX_PAGES, target * 2));
   let token: string | null = null;
   let added = 0;
   let pages = 0;
+  let exhausted = false;
+  let stopReason: FeedStopReason = "page-limit";
+
+  const processGame = (value: unknown, entryTime: string | undefined): boolean => {
+    const payload = parsePayload(value);
+    if (!payload) return false;
+    const record = payloadToRecord(payload, entryTime, userId);
+    if (!record) return false;
+    if (known.has(record.gameId)) {
+      encounteredKnown = true;
+      return false;
+    }
+    known.add(record.gameId);
+    repository.merge(record, limit);
+    added++;
+    return true;
+  };
+
+  const processActivity = (
+    activity: FeedActivity,
+    fallbackTime: string | undefined,
+    depth = 0,
+  ): boolean => {
+    const type = typeof activity.type === "number" ? activity.type : Number(activity.type);
+    const entryTime = typeof activity.time === "string" ? activity.time : fallbackTime;
+
+    if (type === 7) {
+      if (depth > 0) return false;
+      const list = parseJsonValue(activity.payload);
+      if (!Array.isArray(list)) return false;
+      let found = false;
+      for (const item of list) {
+        if (!item || typeof item !== "object") continue;
+        const nested = item as FeedActivity;
+        if (nested.type === undefined) {
+          if (processGame(nested, entryTime)) found = true;
+        } else if (processActivity(nested, entryTime, depth + 1)) {
+          found = true;
+        }
+      }
+      return found;
+    }
+
+    if (type !== 6 && type !== 11) return false;
+    const value = parseJsonValue(activity.payload);
+    if (Array.isArray(value)) {
+      let found = false;
+      for (const item of value) {
+        if (!item || typeof item !== "object") continue;
+        const nested = item as FeedActivity;
+        if (nested.type === undefined) {
+          if (processGame(nested, entryTime)) found = true;
+        } else if (processActivity(nested, entryTime, depth + 1)) {
+          found = true;
+        }
+      }
+      return found;
+    }
+    return processGame(value, entryTime);
+  };
 
   while (pages < maxPages) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const page = await feedPage(token, PAGE_SIZE);
     pages++;
     const entries = Array.isArray(page.entries) ? page.entries : [];
-    if (!entries.length) break;
+    if (!entries.length) {
+      exhausted = true;
+      stopReason = "empty";
+      break;
+    }
 
+    encounteredKnown = false;
     let pageAdded = 0;
     for (const entry of entries) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      const entryTime = typeof entry.time === "string" ? entry.time : undefined;
-      const processPayload = (payload: FeedPayload | null) => {
-        if (!payload || !isDuelType(entry.type)) return;
-        const record = payloadToRecord(payload, entryTime, userId);
-        if (!record || known.has(record.gameId)) return;
-        known.add(record.gameId);
-        repository.merge(record, limit);
-        added++;
-        pageAdded++;
-      };
-
-      if (Array.isArray(entry.payload)) {
-        for (const payload of entry.payload) processPayload(parsePayload(payload));
-      } else {
-        processPayload(parsePayload(entry.payload));
-      }
+      if (processActivity(entry as FeedActivity, undefined)) pageAdded++;
     }
 
     if (pageAdded) onUpdate();
-    if (known.size >= target) break;
-    if (!page.paginationToken) break;
-    if (seenTokens.has(page.paginationToken)) break;
+    if (backfill && known.size >= target) {
+      stopReason = "target";
+      break;
+    }
+    if (!backfill && encounteredKnown) {
+      stopReason = "known-frontier";
+      break;
+    }
+    if (!page.paginationToken) {
+      exhausted = true;
+      stopReason = "exhausted";
+      break;
+    }
+    if (seenTokens.has(page.paginationToken)) {
+      stopReason = "repeated-token";
+      break;
+    }
     seenTokens.add(page.paginationToken);
     token = page.paginationToken;
     await sleep(200, signal);
   }
 
-  return { added, pages };
+  return {
+    added,
+    pages,
+    total: known.size,
+    target,
+    targetReached: known.size >= target,
+    exhausted,
+    stopReason,
+  };
 }
