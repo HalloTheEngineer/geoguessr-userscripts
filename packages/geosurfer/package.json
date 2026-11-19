@@ -1,0 +1,13 @@
+{
+  "name": "@geoguessr-userscripts/geosurfer",
+  "version": "2026.11.19",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../tooling/build-userscript.mjs geosurfer",
+    "build:check": "node ../../tooling/build-userscript.mjs geosurfer --check"
+  },
+  "dependencies": {
+    "gg-kit": "*"
+  }
+}

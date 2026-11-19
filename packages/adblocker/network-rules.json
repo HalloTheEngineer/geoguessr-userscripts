@@ -1,0 +1,40 @@
+{
+  "blockedDomains": [
+    "googletagmanager.com",
+    "doubleclick.net",
+    "amazon-adsystem.com",
+    "snigelweb.com",
+    "confiant-integrations.net",
+    "btloader.com",
+    "anonymised.io",
+    "profitwell.com",
+    "fastclick.net",
+    "id5-sync.com",
+    "fundingchoicesmessages.google.com",
+    "crwdcntrl.net",
+    "criteo.com",
+    "criteo.net",
+    "uidapi.com",
+    "quantcast.com",
+    "cmp.quantcast.com"
+  ],
+  "webRequest": [
+    { "selector": "*://*.googletagmanager.com/*", "action": "cancel" },
+    { "selector": "*://*.doubleclick.net/*", "action": "cancel" },
+    { "selector": "*://*.amazon-adsystem.com/*", "action": "cancel" },
+    { "selector": "*://*.snigelweb.com/*", "action": "cancel" },
+    { "selector": "*://*.confiant-integrations.net/*", "action": "cancel" },
+    { "selector": "*://*.btloader.com/*", "action": "cancel" },
+    { "selector": "*://*.anonymised.io/*", "action": "cancel" },
+    { "selector": "*://*.profitwell.com/*", "action": "cancel" },
+    { "selector": "*://*.fastclick.net/*", "action": "cancel" },
+    { "selector": "*://*.id5-sync.com/*", "action": "cancel" },
+    { "selector": "*://*.fundingchoicesmessages.google.com/*", "action": "cancel" },
+    { "selector": "*://*.crwdcntrl.net/*", "action": "cancel" },
+    { "selector": "*://*.criteo.com/*", "action": "cancel" },
+    { "selector": "*://*.criteo.net/*", "action": "cancel" },
+    { "selector": "*://*.uidapi.com/*", "action": "cancel" },
+    { "selector": "*://*.quantcast.com/*", "action": "cancel" },
+    { "selector": "*://*.cmp.quantcast.com/*", "action": "cancel" }
+  ]
+}

@@ -1,0 +1,62 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: userscript-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+
+      - name: Compute artifact version
+        id: version
+        run: echo "value=$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release artifacts
+        run: node tooling/build-userscript.mjs --version-override "${{ steps.version.outputs.value }}"
+
+      - name: Stage GitHub Pages
+        env:
+          ARTIFACT_VERSION: ${{ steps.version.outputs.value }}
+        run: node tooling/stage-pages.mjs
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Publish media asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view userscripts-assets >/dev/null 2>&1 || \
+            gh release create userscripts-assets --title "Userscript assets" --notes "Media assets for GeoGuessr Toolkit userscripts."
+          gh release upload userscripts-assets assets/geosurfer/brainrot.mp4 --clobber

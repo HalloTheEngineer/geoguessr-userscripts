@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoGamble island exclusion tool</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #d7dde8; background: #0b0d12;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid #1f2430; background: #11141b;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 650; letter-spacing: .01em; }
+  .stats { color: #8b96a9; font-variant-numeric: tabular-nums; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #stage { position: relative; flex: 1; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  aside {
+    width: 300px; flex: none; border-left: 1px solid #1f2430; background: #11141b;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .pane { padding: 12px; border-bottom: 1px solid #1f2430; }
+  .pane h2 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #8b96a9; }
+  #searchWrap { position: relative; }
+  #search { width: 100%; padding: 7px 9px; border-radius: 7px; border: 1px solid #2a3140; background: #0d1016; color: inherit; font: inherit; }
+  #search:focus { outline: 2px solid #3b82f6; outline-offset: 1px; }
+  #results { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; right: 0; background: #161b24; border: 1px solid #2a3140; border-radius: 8px; overflow: hidden; max-height: 240px; overflow-y: auto; }
+  #results:empty { display: none; }
+  #results button { display: block; width: 100%; text-align: left; padding: 7px 9px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  #results button:hover { background: #202838; }
+  .list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 6px; background: #171c26; }
+  .row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row button { flex: none; border: 0; background: transparent; color: #f87171; cursor: pointer; font: inherit; padding: 0 3px; }
+  .empty { color: #6b7688; }
+  .buttons { display: flex; gap: 8px; }
+  button.primary, button.secondary {
+    flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #2a3140; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  button.primary:disabled, button.secondary:disabled { opacity: .45; cursor: not-allowed; }
+  button.secondary { background: #171c26; color: inherit; }
+  #status { padding: 10px 12px; color: #9aa6b8; white-space: pre-wrap; }
+  #hint { padding: 10px 12px; color: #6b7688; font-size: 11.5px; border-top: 1px solid #1f2430; margin-top: auto; }
+  #tooltip {
+    position: fixed; z-index: 10; pointer-events: none; padding: 4px 7px; border-radius: 6px;
+    background: #0f1520; border: 1px solid #2a3140; color: #cbd5e1; font-size: 11.5px;
+    display: none; white-space: nowrap;
+  }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GeoGamble island exclusion tool</h1>
+  <span class="stats" id="stats">loading…</span>
+  <span class="stats" id="selectionCount"></span>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="map"></canvas>
+    <div id="tooltip"></div>
+  </div>
+  <aside>
+    <div class="pane">
+      <h2>Find country</h2>
+      <div id="searchWrap">
+        <input id="search" type="search" placeholder="Country name or ISO code" autocomplete="off">
+        <div id="results"></div>
+      </div>
+    </div>
+    <div class="pane">
+      <h2>Selected for removal</h2>
+      <div class="list" id="selectionList"></div>
+      <div class="buttons" style="margin-top:10px">
+        <button class="secondary" id="previewBtn" disabled>Preview</button>
+        <button class="primary" id="applyBtn" disabled>Apply</button>
+      </div>
+    </div>
+    <div class="pane">
+      <h2>Already excluded</h2>
+      <div class="list" id="excludedList"></div>
+    </div>
+    <div id="status" class="pane"></div>
+    <div id="hint">
+      Click islands to select. Wheel zooms, drag pans, Esc clears.<br>
+      Applying rewrites src/core/countries.generated.js and records the polygons in
+      scripts/data/polygon-exclusions.json. Removed areas fall through to the game's native pin.
+    </div>
+  </aside>
+</main>
+<script>
+const state = {
+  data: { countries: [], exclusions: {}, stats: null },
+  view: { lat: 0, lng: 110, zoom: 2.2 },
+  selection: new Map(),
+  hover: null,
+};
+
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+const tooltip = document.getElementById("tooltip");
+const statsEl = document.getElementById("stats");
+const countEl = document.getElementById("selectionCount");
+const selectionList = document.getElementById("selectionList");
+const excludedList = document.getElementById("excludedList");
+const statusEl = document.getElementById("status");
+const previewBtn = document.getElementById("previewBtn");
+const applyBtn = document.getElementById("applyBtn");
+const search = document.getElementById("search");
+const results = document.getElementById("results");
+
+const keyOf = (iso, index) => `${iso}:${index}`;
+const wrapLng = (lng, ref) => {
+  let value = lng;
+  while (value - ref > 180) value -= 360;
+  while (value - ref < -180) value += 360;
+  return value;
+};
+
+function prepare(countries) {
+  for (const country of countries) {
+    for (const polygon of country.polygons) {
+      const ref = polygon.rings[0][0][0];
+      polygon._ref = ref;
+      polygon._rings = polygon.rings.map((ring) => ring.map(([lng, lat]) => [wrapLng(lng, ref), lat]));
+    }
+  }
+}
+
+async function loadData() {
+  const response = await fetch("/data", { cache: "no-store" });
+  if (!response.ok) throw new Error(`/data failed: ${response.status}`);
+  state.data = await response.json();
+  prepare(state.data.countries);
+  renderStats();
+  renderExcluded();
+  syncSelectionUi();
+  draw();
+}
+
+function renderStats() {
+  const stats = state.data.stats;
+  if (!stats) { statsEl.textContent = ""; return; }
+  statsEl.textContent = `${stats.countries} countries · ${stats.polygons} polygons · ${stats.bytes.toLocaleString()} bytes`;
+}
+
+function renderExcluded() {
+  const rows = [];
+  for (const [iso, rects] of Object.entries(state.data.exclusions || {})) {
+    for (const rect of rects) rows.push(`<div class="row"><span>${escapeHtml(rect.name || `${iso} polygon`)}</span></div>`);
+  }
+  excludedList.innerHTML = rows.length ? rows.join("") : '<div class="empty">none</div>';
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function selectionRows() {
+  const rows = [];
+  for (const [key, entry] of state.selection) {
+    rows.push(`<div class="row"><span>${escapeHtml(entry.label)}</span><button data-remove="${escapeHtml(key)}" title="Remove">×</button></div>`);
+  }
+  return rows;
+}
+
+function syncSelectionUi() {
+  selectionList.innerHTML = selectionRows().join("") || '<div class="empty">none</div>';
+  const count = state.selection.size;
+  countEl.textContent = count ? `${count} selected` : "";
+  previewBtn.disabled = !count;
+  applyBtn.disabled = !count;
+  for (const button of selectionList.querySelectorAll("[data-remove]")) {
+    button.addEventListener("click", () => {
+      state.selection.delete(button.dataset.remove);
+      syncSelectionUi();
+      draw();
+    });
+  }
+}
+
+function bodySize() {
+  const rect = canvas.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
+
+function scale() {
+  return (bodySize().height / 180) * state.view.zoom;
+}
+
+function project(lng, lat) {
+  const { width, height } = bodySize();
+  const k = scale();
+  return { x: (lng - state.view.lng) * k + width / 2, y: (state.view.lat - lat) * k + height / 2 };
+}
+
+function unproject(x, y) {
+  const { width, height } = bodySize();
+  const k = scale();
+  return { lng: state.view.lng + (x - width / 2) / k, lat: state.view.lat - (y - height / 2) / k };
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(rect.width * dpr));
+  canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+function tracePath(rings, offset) {
+  ctx.beginPath();
+  for (const ring of rings) {
+    let first = true;
+    for (const [lng, lat] of ring) {
+      const { x, y } = project(lng + offset, lat);
+      if (first) { ctx.moveTo(x, y); first = false; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+}
+
+function polygonVisible(polygon, offset) {
+  const { width, height } = bodySize();
+  const a = project(polygon.minLng + offset, polygon.maxLat);
+  const b = project(polygon.maxLng + offset, polygon.minLat);
+  return a.x < width && b.x > 0 && a.y < height && b.y > 0;
+}
+
+function draw() {
+  const { width, height } = bodySize();
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#0b0d12";
+  ctx.fillRect(0, 0, width, height);
+
+  const offsets = [-360, 0, 360];
+  const hoverKey = state.hover ? keyOf(state.hover.iso, state.hover.index) : null;
+
+  for (const country of state.data.countries) {
+    for (const polygon of country.polygons) {
+      const key = keyOf(country.iso, polygon.index);
+      const selected = state.selection.has(key);
+      const hovered = key === hoverKey;
+      for (const offset of offsets) {
+        if (!polygonVisible(polygon, offset)) continue;
+        tracePath(polygon._rings, offset);
+        ctx.fillStyle = selected
+          ? "rgba(239,68,68,.55)"
+          : hovered
+            ? "rgba(129,140,248,.45)"
+            : "rgba(74,85,104,.85)";
+        ctx.fill();
+        ctx.lineWidth = selected || hovered ? 1.4 : 0.5;
+        ctx.strokeStyle = selected ? "#fca5a5" : hovered ? "#a5b4fc" : "rgba(15,17,22,.9)";
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(239,68,68,.55)";
+  for (const rects of Object.values(state.data.exclusions || {})) {
+    for (const rect of rects) {
+      for (const offset of offsets) {
+        const a = project(rect.minLng + offset, rect.maxLat);
+        const b = project(rect.maxLng + offset, rect.minLat);
+        ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function pointInRing(lat, lng, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function hitTest(lat, lng) {
+  for (const country of state.data.countries) {
+    for (const polygon of country.polygons) {
+      const adj = wrapLng(lng, polygon._ref);
+      if (adj < polygon.minLng || adj > polygon.maxLng || lat < polygon.minLat || lat > polygon.maxLat) continue;
+      if (pointInRing(lat, adj, polygon._rings[0])) return { country, polygon };
+    }
+  }
+  return null;
+}
+
+function toggleSelection(hit) {
+  const key = keyOf(hit.country.iso, hit.polygon.index);
+  if (state.selection.has(key)) state.selection.delete(key);
+  else state.selection.set(key, { iso: hit.country.iso, index: hit.polygon.index, label: `${hit.country.name} #${hit.polygon.index}` });
+  syncSelectionUi();
+  draw();
+}
+
+function selectionPayload() {
+  const payload = {};
+  for (const entry of state.selection.values()) {
+    (payload[entry.iso] ||= []).push(entry.index);
+  }
+  return payload;
+}
+
+async function post(pathname) {
+  const response = await fetch(pathname, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selections: selectionPayload() }),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload;
+}
+
+function describeRemoved(removed) {
+  return removed.map((entry) => entry.name).join(", ");
+}
+
+async function preview() {
+  statusEl.textContent = "Previewing…";
+  try {
+    const result = await post("/preview");
+    statusEl.textContent = `Would remove ${result.removed.length} polygon(s): ${describeRemoved(result.removed)}\nAfter apply: ${result.stats.countries} countries · ${result.stats.polygons} polygons · ${result.stats.bytes.toLocaleString()} bytes`;
+  } catch (error) {
+    statusEl.textContent = `Preview failed: ${error.message}`;
+  }
+}
+
+async function apply() {
+  statusEl.textContent = "Applying…";
+  try {
+    const result = await post("/apply");
+    statusEl.textContent = `Applied: ${describeRemoved(result.removed)}\n${result.stats.countries} countries · ${result.stats.polygons} polygons · ${result.stats.bytes.toLocaleString()} bytes`;
+    state.selection.clear();
+    await loadData();
+    syncSelectionUi();
+    draw();
+  } catch (error) {
+    statusEl.textContent = `Apply failed: ${error.message}`;
+  }
+}
+
+function focusCountry(iso) {
+  const country = state.data.countries.find((entry) => entry.iso === iso);
+  if (!country) return;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const polygon of country.polygons) {
+    minLat = Math.min(minLat, polygon.minLat);
+    maxLat = Math.max(maxLat, polygon.maxLat);
+    minLng = Math.min(minLng, polygon.minLng);
+    maxLng = Math.max(maxLng, polygon.maxLng);
+  }
+  if (!Number.isFinite(minLat)) return;
+  const { width, height } = bodySize();
+  const k = Math.min(width / Math.max(4, maxLng - minLng), height / Math.max(4, maxLat - minLat)) * 0.6;
+  state.view.zoom = Math.max(0.4, Math.min(60, (k * 180) / height));
+  state.view.lat = (minLat + maxLat) / 2;
+  state.view.lng = (minLng + maxLng) / 2;
+  while (state.view.lng > 180) state.view.lng -= 360;
+  while (state.view.lng < -180) state.view.lng += 360;
+  draw();
+}
+
+let drag = null;
+canvas.addEventListener("pointerdown", (event) => {
+  canvas.setPointerCapture(event.pointerId);
+  drag = { x: event.clientX, y: event.clientY, lng: state.view.lng, lat: state.view.lat, moved: false };
+});
+canvas.addEventListener("pointermove", (event) => {
+  if (drag) {
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    const k = scale();
+    state.view.lng = drag.lng - dx / k;
+    state.view.lat = Math.max(-90, Math.min(90, drag.lat + dy / k));
+    while (state.view.lng > 180) state.view.lng -= 360;
+    while (state.view.lng < -180) state.view.lng += 360;
+    tooltip.style.display = "none";
+    draw();
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const { lat, lng } = unproject(event.clientX - rect.left, event.clientY - rect.top);
+  const hit = hitTest(lat, lng);
+  const next = hit ? { iso: hit.country.iso, index: hit.polygon.index } : null;
+  const changed = JSON.stringify(next) !== JSON.stringify(state.hover);
+  state.hover = next;
+  if (hit) {
+    const label = `${hit.country.name} (${hit.country.iso}) · polygon #${hit.polygon.index}`;
+    tooltip.textContent = label;
+    tooltip.style.display = "block";
+    tooltip.style.left = `${event.clientX + 14}px`;
+    tooltip.style.top = `${event.clientY + 14}px`;
+  } else {
+    tooltip.style.display = "none";
+  }
+  if (changed) draw();
+});
+function endDrag(event) {
+  if (!drag) return;
+  const wasClick = !drag.moved;
+  drag = null;
+  if (!wasClick) return;
+  const rect = canvas.getBoundingClientRect();
+  const { lat, lng } = unproject(event.clientX - rect.left, event.clientY - rect.top);
+  const hit = hitTest(lat, lng);
+  if (hit) toggleSelection(hit);
+}
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", () => { drag = null; });
+canvas.addEventListener("pointerleave", () => {
+  if (!drag) { state.hover = null; tooltip.style.display = "none"; draw(); }
+});
+canvas.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const before = unproject(event.clientX - rect.left, event.clientY - rect.top);
+  const factor = Math.exp(-event.deltaY * 0.0015);
+  state.view.zoom = Math.max(0.4, Math.min(80, state.view.zoom * factor));
+  const after = unproject(event.clientX - rect.left, event.clientY - rect.top);
+  state.view.lng += before.lng - after.lng;
+  state.view.lat = Math.max(-90, Math.min(90, state.view.lat + before.lat - after.lat));
+  draw();
+}, { passive: false });
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    state.selection.clear();
+    results.innerHTML = "";
+    search.value = "";
+    syncSelectionUi();
+    draw();
+  }
+});
+
+search.addEventListener("input", () => {
+  const query = search.value.trim().toLowerCase();
+  results.innerHTML = "";
+  if (!query) return;
+  const matches = state.data.countries
+    .filter((country) => country.iso.includes(query) || country.name.toLowerCase().includes(query))
+    .slice(0, 10);
+  results.innerHTML = matches.map((country) => `<button data-iso="${country.iso}">${escapeHtml(country.name)} <span class="empty">${country.iso}</span></button>`).join("");
+  for (const button of results.querySelectorAll("[data-iso]")) {
+    button.addEventListener("click", () => {
+      focusCountry(button.dataset.iso);
+      results.innerHTML = "";
+      search.value = "";
+    });
+  }
+});
+
+previewBtn.addEventListener("click", preview);
+applyBtn.addEventListener("click", apply);
+
+window.addEventListener("resize", resize);
+resize();
+
+window.__islandTool = {
+  get data() { return state.data; },
+  get view() { return state.view; },
+  get selection() { return [...state.selection.values()]; },
+  focusCountry,
+  select(iso, index) {
+    const country = state.data.countries.find((entry) => entry.iso === iso);
+    const polygon = country?.polygons.find((entry) => entry.index === index);
+    if (!polygon) return false;
+    toggleSelection({ country, polygon });
+    return true;
+  },
+  toggleAt(lat, lng) {
+    const hit = hitTest(lat, lng);
+    if (hit) toggleSelection(hit);
+    return hit ? { iso: hit.country.iso, index: hit.polygon.index } : null;
+  },
+  pagePoint(lat, lng) {
+    const rect = canvas.getBoundingClientRect();
+    const point = project(lng, lat);
+    return { x: rect.left + point.x, y: rect.top + point.y };
+  },
+  preview,
+  apply,
+};
+
+loadData().catch((error) => { statusEl.textContent = `Load failed: ${error.message}`; });
+</script>
+</body>
+</html>

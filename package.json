@@ -1,0 +1,40 @@
+{
+  "name": "geoguessr-userscripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node tooling/build-userscript.mjs",
+    "build:check": "node tooling/build-userscript.mjs --check",
+    "dev": "node tooling/dev-server.mjs",
+    "lint": "node tooling/check-selectors.mjs && biome check .",
+    "typecheck": "tsc -p packages/gg-kit/tsconfig.json && tsc -p packages/adblocker/tsconfig.json && tsc -p packages/match-notifier/tsconfig.json && tsc -p packages/persistent-game-summary/tsconfig.json && tsc -p packages/geogamble/tsconfig.json && tsc -p packages/geosurfer/tsconfig.json",
+    "test:kit": "tsx --test --test-force-exit packages/gg-kit/tests/*.test.ts",
+    "test:geogamble": "tsx --test --test-force-exit packages/geogamble/tests/*.test.mjs",
+    "test": "npm run test:kit && npm run test:geogamble && npm run test:artifacts",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run build:check && npm test",
+    "publish": "node tooling/publish-migration-notices.mjs",
+    "site:build": "node tooling/site-build.mjs",
+    "test:artifacts": "node --test --test-force-exit tests/*.test.mjs",
+    "pretest": "npm run build && npm run build:migrations",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "stage:pages": "node tooling/stage-pages.mjs",
+    "build:site": "node tooling/build-site.mjs",
+    "build:migrations": "node tooling/build-migration-notices.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

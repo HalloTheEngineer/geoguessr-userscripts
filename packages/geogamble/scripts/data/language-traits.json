@@ -1,0 +1,510 @@
+{
+  "afr": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "amh": {
+    "script": "Ethiopic",
+    "family": "Semitic"
+  },
+  "ara": {
+    "script": "Arabic",
+    "family": "Semitic"
+  },
+  "arc": {
+    "script": "Syriac",
+    "family": "Semitic"
+  },
+  "aym": {
+    "script": "Latin",
+    "family": "Aymaran"
+  },
+  "aze": {
+    "script": "Latin",
+    "family": "Turkic"
+  },
+  "bar": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "bel": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "ben": {
+    "script": "Bengali",
+    "family": "Indo-Aryan"
+  },
+  "ber": {
+    "script": "Tifinagh",
+    "family": "Berber"
+  },
+  "bis": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "bjz": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "bos": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "bul": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "bwg": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "ces": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "ckb": {
+    "script": "Arabic",
+    "family": "Iranian"
+  },
+  "cnr": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "dan": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "deu": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "dzo": {
+    "script": "Tibetan",
+    "family": "Tibeto-Burman"
+  },
+  "ell": {
+    "script": "Greek",
+    "family": "Hellenic"
+  },
+  "eng": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "est": {
+    "script": "Latin",
+    "family": "Uralic"
+  },
+  "fas": {
+    "script": "Arabic",
+    "family": "Iranian"
+  },
+  "fij": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "fil": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "fin": {
+    "script": "Latin",
+    "family": "Uralic"
+  },
+  "fra": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "gle": {
+    "script": "Latin",
+    "family": "Celtic"
+  },
+  "grn": {
+    "script": "Latin",
+    "family": "Tupian"
+  },
+  "gsw": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "hat": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "heb": {
+    "script": "Hebrew",
+    "family": "Semitic"
+  },
+  "her": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "hgm": {
+    "script": "Latin",
+    "family": "Khoisan"
+  },
+  "hif": {
+    "script": "Latin",
+    "family": "Indo-Aryan"
+  },
+  "hin": {
+    "script": "Devanagari",
+    "family": "Indo-Aryan"
+  },
+  "hmo": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "hrv": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "hun": {
+    "script": "Latin",
+    "family": "Uralic"
+  },
+  "hye": {
+    "script": "Armenian",
+    "family": "Armenian"
+  },
+  "ind": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "isl": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "ita": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "jam": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "jpn": {
+    "script": "Japanese",
+    "family": "Japonic"
+  },
+  "kal": {
+    "script": "Latin",
+    "family": "Eskimo-Aleut"
+  },
+  "kat": {
+    "script": "Georgian",
+    "family": "Kartvelian"
+  },
+  "kaz": {
+    "script": "Cyrillic",
+    "family": "Turkic"
+  },
+  "kck": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "khi": {
+    "script": "Latin",
+    "family": "Khoisan"
+  },
+  "khm": {
+    "script": "Khmer",
+    "family": "Austroasiatic"
+  },
+  "kin": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "kir": {
+    "script": "Cyrillic",
+    "family": "Turkic"
+  },
+  "kon": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "kor": {
+    "script": "Hangul",
+    "family": "Koreanic"
+  },
+  "kwn": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "lao": {
+    "script": "Lao",
+    "family": "Kra-Dai"
+  },
+  "lav": {
+    "script": "Latin",
+    "family": "Baltic"
+  },
+  "lin": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "lit": {
+    "script": "Latin",
+    "family": "Baltic"
+  },
+  "loz": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "ltz": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "lua": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "mey": {
+    "script": "Arabic",
+    "family": "Semitic"
+  },
+  "mkd": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "mlg": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "mon": {
+    "script": "Cyrillic",
+    "family": "Mongolic"
+  },
+  "mri": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "msa": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "mya": {
+    "script": "Myanmar",
+    "family": "Tibeto-Burman"
+  },
+  "nbl": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "ndc": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "nde": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "ndo": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "nep": {
+    "script": "Devanagari",
+    "family": "Indo-Aryan"
+  },
+  "nld": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "nno": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "nob": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "nso": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "nya": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "nzs": {
+    "script": "Sign",
+    "family": "Sign"
+  },
+  "pol": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "por": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "pov": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "prs": {
+    "script": "Arabic",
+    "family": "Iranian"
+  },
+  "pus": {
+    "script": "Arabic",
+    "family": "Iranian"
+  },
+  "que": {
+    "script": "Latin",
+    "family": "Quechuan"
+  },
+  "roh": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "ron": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "run": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "rus": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "sag": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "sin": {
+    "script": "Sinhala",
+    "family": "Indo-Aryan"
+  },
+  "slk": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "slv": {
+    "script": "Latin",
+    "family": "Slavic"
+  },
+  "smi": {
+    "script": "Latin",
+    "family": "Uralic"
+  },
+  "sna": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "som": {
+    "script": "Latin",
+    "family": "Cushitic"
+  },
+  "sot": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "spa": {
+    "script": "Latin",
+    "family": "Romance"
+  },
+  "sqi": {
+    "script": "Latin",
+    "family": "Albanian"
+  },
+  "srp": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "ssw": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "swa": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "swe": {
+    "script": "Latin",
+    "family": "Germanic"
+  },
+  "tam": {
+    "script": "Tamil",
+    "family": "Dravidian"
+  },
+  "tet": {
+    "script": "Latin",
+    "family": "Austronesian"
+  },
+  "tgk": {
+    "script": "Cyrillic",
+    "family": "Iranian"
+  },
+  "tha": {
+    "script": "Thai",
+    "family": "Kra-Dai"
+  },
+  "tir": {
+    "script": "Ethiopic",
+    "family": "Semitic"
+  },
+  "toi": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "tpi": {
+    "script": "Latin",
+    "family": "Creole"
+  },
+  "tsn": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "tso": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "tuk": {
+    "script": "Latin",
+    "family": "Turkic"
+  },
+  "tur": {
+    "script": "Latin",
+    "family": "Turkic"
+  },
+  "ukr": {
+    "script": "Cyrillic",
+    "family": "Slavic"
+  },
+  "urd": {
+    "script": "Arabic",
+    "family": "Indo-Aryan"
+  },
+  "uzb": {
+    "script": "Latin",
+    "family": "Turkic"
+  },
+  "ven": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "vie": {
+    "script": "Latin",
+    "family": "Vietic"
+  },
+  "xho": {
+    "script": "Latin",
+    "family": "Bantu"
+  },
+  "zho": {
+    "script": "Han",
+    "family": "Sinitic"
+  },
+  "zib": {
+    "script": "Sign",
+    "family": "Sign"
+  },
+  "zul": {
+    "script": "Latin",
+    "family": "Bantu"
+  }
+}

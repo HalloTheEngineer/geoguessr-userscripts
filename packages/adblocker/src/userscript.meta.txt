@@ -1,0 +1,17 @@
+// ==UserScript==
+// @name         GeoGuessr Toolkit: AdBlocker
+// @namespace    https://github.com/HalloTheEngineer/geoguessr-userscripts
+// @version      __VERSION__
+// @description  Blocks known ad/analytics requests and cleans up selected GeoGuessr UI.
+// @author       PixlPainter
+// @license      MIT
+// @homepageURL  https://github.com/HalloTheEngineer/geoguessr-userscripts
+// @supportURL   https://github.com/HalloTheEngineer/geoguessr-userscripts/issues
+// @updateURL    __UPDATE_URL__
+// @downloadURL  __DOWNLOAD_URL__
+// @match        https://www.geoguessr.com/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=geoguessr.com
+// @grant        none
+// @run-at       document-start
+__WEBREQUEST_LINES__
+// ==/UserScript==

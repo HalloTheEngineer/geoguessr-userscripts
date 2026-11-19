@@ -1,0 +1,313 @@
+{
+  "id": [
+    {
+      "name": "Indonesia #0",
+      "minLat": -9.12,
+      "maxLat": -0.37,
+      "minLng": 130.52,
+      "maxLng": 141.03
+    },
+    {
+      "name": "Indonesia #3",
+      "minLat": -3.86,
+      "maxLat": -2.8,
+      "minLng": 127.9,
+      "maxLng": 130.83
+    },
+    {
+      "name": "Indonesia #4",
+      "minLat": -3.79,
+      "maxLat": -3.13,
+      "minLng": 125.99,
+      "maxLng": 127.25
+    }
+  ],
+  "ru": [
+    {
+      "name": "Russia #2",
+      "minLat": 78.76,
+      "maxLat": 81.25,
+      "minLng": 91.18,
+      "maxLng": 100.19
+    },
+    {
+      "name": "Russia #9",
+      "minLat": 70.63,
+      "maxLat": 76.94,
+      "minLng": 51.46,
+      "maxLng": 68.85
+    },
+    {
+      "name": "Russia #7",
+      "minLat": 80.01,
+      "maxLat": 80.92,
+      "minLng": 44.85,
+      "maxLng": 51.52
+    },
+    {
+      "name": "Russia #3",
+      "minLat": 77.92,
+      "maxLat": 79.35,
+      "minLng": 99.44,
+      "maxLng": 105.37
+    },
+    {
+      "name": "Russia #6",
+      "minLat": 73.21,
+      "maxLat": 73.86,
+      "minLng": 139.86,
+      "maxLng": 143.6
+    },
+    {
+      "name": "Russia #4",
+      "minLat": 74.61,
+      "maxLat": 76.14,
+      "minLng": 136.97,
+      "maxLng": 145.09
+    },
+    {
+      "name": "Russia #5",
+      "minLat": 74.69,
+      "maxLat": 75.5,
+      "minLng": 146.12,
+      "maxLng": 150.73
+    },
+    {
+      "name": "Russia #0",
+      "minLat": 70.78,
+      "maxLat": 71.52,
+      "minLng": 178.73,
+      "maxLng": 180
+    },
+    {
+      "name": "Russia #12",
+      "minLat": 70.83,
+      "maxLat": 71.56,
+      "minLng": -180,
+      "maxLng": -177.58
+    }
+  ],
+  "no": [
+    {
+      "name": "Norway #0",
+      "minLat": 76.77,
+      "maxLat": 80.05,
+      "minLng": 10.44,
+      "maxLng": 21.54
+    },
+    {
+      "name": "Norway #2",
+      "minLat": 79.4,
+      "maxLat": 80.66,
+      "minLng": 17.37,
+      "maxLng": 27.41
+    },
+    {
+      "name": "Norway #3",
+      "minLat": 77.44,
+      "maxLat": 78.45,
+      "minLng": 20.73,
+      "maxLng": 24.72
+    }
+  ],
+  "ca": [
+    {
+      "name": "Canada #9",
+      "minLat": 78.41,
+      "maxLat": 78.85,
+      "minLng": -112.54,
+      "maxLng": -109.66
+    },
+    {
+      "name": "Canada #8",
+      "minLat": 77.41,
+      "maxLat": 78.15,
+      "minLng": -113.53,
+      "maxLng": -109.85
+    },
+    {
+      "name": "Canada #19",
+      "minLat": 74.39,
+      "maxLat": 76.79,
+      "minLng": -117.71,
+      "maxLng": -105.7
+    },
+    {
+      "name": "Canada #14",
+      "minLat": 75.9,
+      "maxLat": 77.65,
+      "minLng": -122.85,
+      "maxLng": -116.2
+    },
+    {
+      "name": "Canada #20",
+      "minLat": 68.54,
+      "maxLat": 73.31,
+      "minLng": -119.4,
+      "maxLng": -100.98
+    },
+    {
+      "name": "Canada #18",
+      "minLat": 70.9,
+      "maxLat": 74.45,
+      "minLng": -125.93,
+      "maxLng": -115.51
+    },
+    {
+      "name": "Canada #27",
+      "minLat": 68.76,
+      "maxLat": 70.14,
+      "minLng": -99.8,
+      "maxLng": -95.65
+    },
+    {
+      "name": "Canada #21",
+      "minLat": 71.27,
+      "maxLat": 73.84,
+      "minLng": -102.5,
+      "maxLng": -96.54
+    },
+    {
+      "name": "Canada #22",
+      "minLat": 72.76,
+      "maxLat": 73.64,
+      "minLng": -106.94,
+      "maxLng": -104.5
+    },
+    {
+      "name": "Canada #23",
+      "minLat": 74.9,
+      "maxLat": 76.72,
+      "minLng": -102.57,
+      "maxLng": -97.7
+    },
+    {
+      "name": "Canada #16",
+      "minLat": 77.91,
+      "maxLat": 79.3,
+      "minLng": -105.49,
+      "maxLng": -99.67
+    },
+    {
+      "name": "Canada #11",
+      "minLat": 63.05,
+      "maxLat": 65.74,
+      "minLng": -87.22,
+      "maxLng": -80.1
+    },
+    {
+      "name": "Canada #1",
+      "minLat": 62.16,
+      "maxLat": 62.91,
+      "minLng": -83.99,
+      "maxLng": -81.88
+    },
+    {
+      "name": "Canada #3",
+      "minLat": 61.63,
+      "maxLat": 62.39,
+      "minLng": -80.36,
+      "maxLng": -79.27
+    },
+    {
+      "name": "Canada #12",
+      "minLat": 61.93,
+      "maxLat": 73.8,
+      "minLng": -90.21,
+      "maxLng": -61.85
+    },
+    {
+      "name": "Canada #26",
+      "minLat": 67.1,
+      "maxLat": 68.29,
+      "minLng": -77.24,
+      "maxLng": -75.1
+    },
+    {
+      "name": "Canada #2",
+      "minLat": 72.74,
+      "maxLat": 73.76,
+      "minLng": -80.88,
+      "maxLng": -76.25
+    },
+    {
+      "name": "Canada #25",
+      "minLat": 76.18,
+      "maxLat": 83.23,
+      "minLng": -91.59,
+      "maxLng": -61.85
+    },
+    {
+      "name": "Canada #7",
+      "minLat": 74.39,
+      "maxLat": 77.16,
+      "minLng": -97.12,
+      "maxLng": -79.83
+    },
+    {
+      "name": "Canada #13",
+      "minLat": 72.02,
+      "maxLat": 74.13,
+      "minLng": -96.03,
+      "maxLng": -90.51
+    },
+    {
+      "name": "Canada #4",
+      "minLat": 74.59,
+      "maxLat": 75.65,
+      "minLng": -96.82,
+      "maxLng": -93.61
+    },
+    {
+      "name": "Canada #5",
+      "minLat": 77.49,
+      "maxLat": 77.83,
+      "minLng": -96.44,
+      "maxLng": -93.72
+    },
+    {
+      "name": "Canada #6",
+      "minLat": 77.85,
+      "maxLat": 78.87,
+      "minLng": -98.63,
+      "maxLng": -95.56
+    },
+    {
+      "name": "Canada #24",
+      "minLat": 78.22,
+      "maxLat": 81.26,
+      "minLng": -96.71,
+      "maxLng": -85.81
+    },
+    {
+      "name": "Canada #28",
+      "minLat": 49.09,
+      "maxLat": 49.96,
+      "minLng": -64.52,
+      "maxLng": -61.81
+    },
+    {
+      "name": "Canada #15",
+      "minLat": 52.18,
+      "maxLat": 54.17,
+      "minLng": -133.24,
+      "maxLng": -131.18
+    }
+  ],
+  "us": [
+    {
+      "name": "United States of America #6",
+      "minLat": 59.75,
+      "maxLat": 60.38,
+      "minLng": -167.46,
+      "maxLng": -165.58
+    },
+    {
+      "name": "United States of America #9",
+      "minLat": 62.98,
+      "maxLat": 63.78,
+      "minLng": -171.79,
+      "maxLng": -168.69
+    }
+  ]
+}

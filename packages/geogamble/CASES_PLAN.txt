@@ -1,0 +1,6 @@
+Next: plan a new feature section: case openings (counter strike like) that provide guess hints in non competitive gamemodes only.
+
+A new button in the bottom left in game game controls group should be added (use a chest/box svg). When clicked, a new overlay should open:
+The overlay contains three different types of crates in one row, each one is of a different kind/tier (plan this game design and suggest hints grouped by tier, eg. mythic pull = 5k, etc.).
+
+When a chest is opened, a cs like gambling screen (moving band of individual pulls with marker in the middle, slowing speed until a random one is selected) is opened. After the pull is determined (band is not moving), play beautiful winning animation based on rarity pulled (common, uncommon, rare, epic, legendary, mythic). Then, the overlay closes and the pull is applied visually, etc.

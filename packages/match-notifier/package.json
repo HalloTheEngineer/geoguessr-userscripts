@@ -1,0 +1,13 @@
+{
+  "name": "@geoguessr-userscripts/match-notifier",
+  "version": "2026.11.19",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../tooling/build-userscript.mjs match-notifier",
+    "build:check": "node ../../tooling/build-userscript.mjs match-notifier --check"
+  },
+  "dependencies": {
+    "gg-kit": "*"
+  }
+}

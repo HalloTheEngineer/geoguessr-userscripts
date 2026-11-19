@@ -1,0 +1,10 @@
+{
+  "name": "@geoguessr-userscripts/adblocker",
+  "version": "2026.11.19",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../tooling/build-userscript.mjs adblocker",
+    "build:check": "node ../../tooling/build-userscript.mjs adblocker --check"
+  }
+}

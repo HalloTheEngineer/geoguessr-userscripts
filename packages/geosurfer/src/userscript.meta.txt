@@ -1,0 +1,18 @@
+// ==UserScript==
+// @name         GeoGuessr Toolkit: GeoSurfer
+// @namespace    https://github.com/HalloTheEngineer/geoguessr-userscripts
+// @version      __VERSION__
+// @description  Adds a lightweight optional video overlay to the in-game stats panel.
+// @author       PixlPainter
+// @license      MIT
+// @homepageURL  https://github.com/HalloTheEngineer/geoguessr-userscripts
+// @supportURL   https://github.com/HalloTheEngineer/geoguessr-userscripts/issues
+// @updateURL    __UPDATE_URL__
+// @downloadURL  __DOWNLOAD_URL__
+// @match        https://www.geoguessr.com/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=geoguessr.com
+// @grant        GM_getResourceURL
+// @run-at       document-start
+// @noframes
+__RESOURCE_LINES__
+// ==/UserScript==

@@ -1,0 +1,23 @@
+{
+  "name": "geogamble",
+  "version": "2026.11.19",
+  "private": true,
+  "type": "module",
+  "description": "GeoGuessr country gambling and per-round location case userscript",
+  "scripts": {
+    "build": "node ../../tooling/build-userscript.mjs geogamble",
+    "build:check": "node ../../tooling/build-userscript.mjs geogamble --check",
+    "dev": "node ../../tooling/dev-server.mjs geogamble",
+    "test": "tsx --test --test-force-exit tests/*.test.mjs",
+    "countries": "node scripts/generate-countries.mjs",
+    "island-tool": "node scripts/island-tool.mjs",
+    "hint-data": "node scripts/generate-hint-data.mjs",
+    "pretest": "npm run build"
+  },
+  "devDependencies": {
+    "koppen-climate-lookup": "^2.0.0"
+  },
+  "dependencies": {
+    "gg-kit": "*"
+  }
+}
