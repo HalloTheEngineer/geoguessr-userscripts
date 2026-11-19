@@ -39,7 +39,7 @@ This refactor intentionally drops legacy settings/history. The new config/data k
 - `gg.better-game-history.history`
 - `gg.geogamble.config`
 
-The old Persistent Game Summary keys are removed on first load. Better Game History history and settings are preserved across normal script updates. Include this warning in the next release notes. Dev builds use the next patch version with a `-dev` prerelease; CI publishes date/run-versioned artifacts.
+The old Persistent Game Summary keys are removed on first load. Better Game History history and settings are preserved across normal script updates. Ranked backfill targets 300 solo and 300 team duels per queue; unranked games are recorded only from live play. Include this warning in the next release notes. Dev builds use the next patch version with a `-dev` prerelease; CI publishes date/run-versioned artifacts.
 
 ## Pre-release checklist
 

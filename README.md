@@ -10,7 +10,7 @@ A small monorepo for GeoGuessr userscripts. Each script is built from `src/` int
 | `packages/geogamble` | `dist/geoguessr-geogamble.user.js` | Country gambling and per-round location cases |
 | `packages/match-notifier` | `dist/geoguessr-match-notifier.user.js` | Match and new-round alert sounds |
 | `packages/geosurfer` | `dist/geoguessr-geosurfer.user.js` | Optional lazy video overlay for the in-game stats panel |
-| `packages/better-game-history` | `dist/geoguessr-better-game-history.user.js` | Account-scoped duel history, 200-game backfill, and rating graphs |
+| `packages/better-game-history` | `dist/geoguessr-better-game-history.user.js` | Account-scoped solo/team history, 300-per-queue ranked backfill, and selectable team graphs |
 
 Install a generated artifact in Tampermonkey, Violentmonkey, or a compatible userscript manager. Artifacts are published to GitHub Pages:
 

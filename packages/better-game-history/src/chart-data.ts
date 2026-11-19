@@ -57,22 +57,63 @@ function inTimeframe(time: string, timeframe: GraphFilters["timeframe"], now: nu
   return timestamp >= now - windowMs;
 }
 
+export interface TeamOption {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export function getTeamOptions(records: readonly GameRecord[]): TeamOption[] {
+  const teams = new Map<string, TeamOption>();
+  for (const record of records) {
+    if (!record.isTeamDuel || !record.teamKey) continue;
+    const existing = teams.get(record.teamKey);
+    if (existing) {
+      existing.count++;
+      continue;
+    }
+    const teammates = (record.teammateNicks || []).filter((nick) => nick && nick !== record.userId);
+    const label = teammates.length ? `You + ${teammates.join(" & ")}` : "Your team";
+    teams.set(record.teamKey, { key: record.teamKey, label, count: 1 });
+  }
+  return [...teams.values()].sort(
+    (left, right) => right.count - left.count || left.label.localeCompare(right.label),
+  );
+}
+
 export function getChartData(
   records: readonly GameRecord[],
-  filters: Pick<GraphFilters, "timeframe" | "metric" | "typeFilter" | "modeFilter">,
+  filters: Pick<
+    GraphFilters,
+    "timeframe" | "metric" | "typeFilter" | "modeFilter" | "queue" | "teamKey"
+  >,
   now = Date.now(),
 ): GraphPoint[] {
   const points: GraphPoint[] = [];
+  const queue = filters.queue || "solo";
   for (const record of records) {
-    if (record.hydration.state !== "ok" || record.isTeamDuel) continue;
+    if (record.hydration.state !== "ok") continue;
+    if (queue === "solo" && record.isTeamDuel) continue;
+    if (queue === "team" && !record.isTeamDuel) continue;
+    if (queue === "team" && filters.teamKey && record.teamKey !== filters.teamKey) continue;
     if (!inTimeframe(record.time, filters.timeframe, now)) continue;
     if (filters.typeFilter === "Ranked" && !record.isRated) continue;
     if (filters.typeFilter === "Unranked" && record.isRated) continue;
-    if (filters.modeFilter !== "All" && recordModeGroup(record) !== filters.modeFilter) continue;
-    const value = metricValue(record, filters.metric, filters.modeFilter);
+    if (
+      queue === "solo" &&
+      filters.modeFilter !== "All" &&
+      recordModeGroup(record) !== filters.modeFilter
+    )
+      continue;
+    const value = metricValue(
+      record,
+      filters.metric,
+      queue === "team" ? "All" : filters.modeFilter,
+    );
     if (value === null || !Number.isFinite(value)) continue;
     const date = new Date(record.time);
     if (Number.isNaN(date.getTime())) continue;
+    const teammates = (record.teammateNicks || []).join(" & ");
     points.push({
       time: record.time,
       label: pointLabel(date, filters.timeframe),
@@ -84,6 +125,8 @@ export function getChartData(
       mode: record.mode,
       gameId: record.gameId,
       isTeamDuel: record.isTeamDuel,
+      teamKey: record.teamKey,
+      teamLabel: teammates ? `You + ${teammates}` : undefined,
     });
   }
   return points.sort(

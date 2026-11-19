@@ -33,14 +33,18 @@ interface WsPlayer {
   playerId?: string;
   nick?: string;
   progressChange?: {
-    rankedSystemProgress?: {
-      ratingBefore?: number;
-      ratingAfter?: number;
-      ratingChange?: number;
-      gameModeRatingAfter?: number;
-      gameMode?: string;
-    };
+    rankedSystemProgress?: WsProgress;
+    rankedTeamDuelsProgress?: WsProgress;
+    competitiveProgress?: WsProgress;
   };
+}
+
+interface WsProgress {
+  ratingBefore?: number;
+  ratingAfter?: number;
+  ratingChange?: number;
+  gameModeRatingAfter?: number;
+  gameMode?: string;
 }
 
 interface WsTeam {
@@ -70,6 +74,8 @@ function filtersFromConfig(): GraphFilters {
     metric: config.get("defaultMetric"),
     typeFilter: config.get("defaultTypeFilter"),
     modeFilter: config.get("defaultModeFilter"),
+    queue: config.get("defaultQueue"),
+    teamKey: "",
     showTrend: config.get("defaultShowTrend"),
     candleMode: config.get("defaultCandleMode"),
   };
@@ -94,7 +100,7 @@ startUserscript({
     config,
     sections: [
       { id: "general", title: "General", fields: ["enabled", "showDrawer"] },
-      { id: "history", title: "History", fields: ["historyLimit", "feedTargetGames"] },
+      { id: "history", title: "History", fields: ["historyLimit", "rankedTargetPerQueue"] },
       {
         id: "graph",
         title: "Graph defaults",
@@ -103,6 +109,7 @@ startUserscript({
           "defaultTimeframe",
           "defaultTypeFilter",
           "defaultModeFilter",
+          "defaultQueue",
           "defaultShowTrend",
           "defaultCandleMode",
         ],
@@ -187,7 +194,8 @@ startUserscript({
       void (async () => {
         try {
           while (generation === workGeneration && !signal?.aborted && config.get("enabled")) {
-            const record = repository.pending(id).find((item) => item.hydration.attempts < 4);
+            const pending = repository.pending(id).filter((item) => item.hydration.attempts < 4);
+            const record = pending.find((item) => item.isRated) || pending[0];
             if (!record) break;
             const result = await hydrateGameDetails(record.gameId, id, signal);
             if (generation !== workGeneration || signal?.aborted) break;
@@ -245,7 +253,7 @@ startUserscript({
             userId: id,
             repository,
             limit: limit(),
-            targetGames: config.get("feedTargetGames"),
+            targetPerQueue: config.get("rankedTargetPerQueue"),
             signal: controller.signal,
             onUpdate: () => {
               if (generation !== workGeneration) return;
@@ -254,12 +262,12 @@ startUserscript({
             },
           });
           const feedStatus = result.targetReached
-            ? "target reached"
+            ? "both targets reached"
             : result.exhausted
               ? "feed exhausted"
               : result.stopReason;
           context.log(
-            `feed sync added ${result.added} games across ${result.pages} page(s); ${result.total}/${result.target} stored; ${feedStatus}`,
+            `feed sync added ${result.added} ranked games across ${result.pages} page(s); solo ${result.solo}/${result.target}, team ${result.team}/${result.target}; ${feedStatus}; skipped ${result.ignoredUnranked} unranked entries`,
           );
         } catch (error) {
           if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -319,7 +327,22 @@ startUserscript({
       const opponentTeam = teams.find((team) => team !== myTeam);
       if (!opponentTeam) return;
       const opponent = opponentTeam.players?.[0];
-      const progress = me.progressChange?.rankedSystemProgress;
+      const isTeamDuel = teams.some((team) => (team.players || []).length > 1);
+      const progress = isTeamDuel
+        ? me.progressChange?.rankedTeamDuelsProgress || me.progressChange?.competitiveProgress
+        : me.progressChange?.rankedSystemProgress || me.progressChange?.competitiveProgress;
+      const myPlayers = myTeam.players || [];
+      const teamPlayerIds = myPlayers
+        .map((player) => player.playerId)
+        .filter((playerId): playerId is string => !!playerId);
+      const teamPlayerNicks = myPlayers.map(
+        (player) => player.nick || player.playerId || "Unknown",
+      );
+      const teammateIds = teamPlayerIds.filter((playerId) => playerId !== userId);
+      const teammateNicks = myPlayers
+        .filter((player) => player.playerId !== userId)
+        .map((player) => player.nick || player.playerId || "Unknown");
+      const teamKey = teamPlayerIds.length ? [...teamPlayerIds].sort().join(":") : undefined;
       const ratingBefore = toFiniteNumber(progress?.ratingBefore) ?? undefined;
       const ratingAfter = toFiniteNumber(progress?.ratingAfter) ?? undefined;
       const derivedChange =
@@ -341,12 +364,17 @@ startUserscript({
         modeKey,
         mode: formatModeName(modeKey, isRated),
         isRated,
-        isTeamDuel: teams.some((team) => (team.players || []).length > 1),
+        isTeamDuel,
         opponent:
           typeof opponent?.nick === "string" && opponent.nick !== "undefined"
             ? opponent.nick
             : undefined,
         opponentId: opponent?.playerId,
+        teamKey,
+        teamPlayerIds,
+        teamPlayerNicks,
+        teammateIds,
+        teammateNicks,
         win:
           typeof state?.result?.winningTeamId === "string" && typeof myTeam.id === "string"
             ? state.result.winningTeamId === myTeam.id

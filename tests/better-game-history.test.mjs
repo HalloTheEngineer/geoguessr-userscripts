@@ -47,6 +47,28 @@ test("Better Game History mounts account-scoped history and graph access", async
           updatedAt: "2026-11-19T12:01:00.000Z",
           source: "hydration",
         },
+        {
+          gameId: "team-game-1",
+          userId: "account-user",
+          time: "2026-11-19T13:00:00.000Z",
+          modeKey: "TeamDuels",
+          mode: "Team",
+          isRated: true,
+          isTeamDuel: true,
+          opponent: "Rivals",
+          teamKey: "account-user:mate-user",
+          teamPlayerIds: ["account-user", "mate-user"],
+          teamPlayerNicks: ["Me", "Mate"],
+          teammateIds: ["mate-user"],
+          teammateNicks: ["Mate"],
+          win: true,
+          ratingBefore: 1500,
+          ratingAfter: 1515,
+          ratingChange: 15,
+          hydration: { state: "ok", attempts: 1 },
+          updatedAt: "2026-11-19T13:01:00.000Z",
+          source: "hydration",
+        },
       ],
     }),
   );
@@ -85,4 +107,12 @@ test("Better Game History mounts account-scoped history and graph access", async
 
   dom.window.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "g", altKey: true }));
   assert.ok(dom.document.getElementById("bgh-history-graph"));
+  const teamButton = [...dom.document.querySelectorAll(".bgh-graph-filter")].find(
+    (button) => button.dataset.filter === "queue" && button.dataset.value === "team",
+  );
+  assert.ok(teamButton);
+  teamButton.click();
+  const teamSelect = dom.document.getElementById("bgh-team-select");
+  assert.ok(teamSelect);
+  assert.match(teamSelect.textContent || "", /You \+ Mate/);
 });

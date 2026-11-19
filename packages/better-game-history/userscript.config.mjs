@@ -8,13 +8,14 @@ export default {
   sizeBudget: 620000,
   site: {
     displayName: "Better Game History",
-    summary: "Keeps a reliable, account-scoped duel history with rating and performance graphs.",
+    summary: "Keeps ranked solo and team history with selectable team rating graphs.",
     features: [
-      "Account-scoped duel history",
+      "Ranked solo and team history",
+      "Team composition graph filter",
       "Rating and score graphs",
       "Moving averages",
       "Candlestick views",
-      "Team duel detection",
+      "Live unranked history",
     ],
     accent: "#34d399",
     order: 50,

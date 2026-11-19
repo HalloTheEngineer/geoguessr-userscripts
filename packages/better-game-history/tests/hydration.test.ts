@@ -87,3 +87,72 @@ test("hydration distinguishes unavailable matches from retryable failures", asyn
   const retry = await hydrateGameDetails("game-1", "user-1");
   assert.equal(retry.status, "retry");
 });
+
+test("team hydration uses team progress and composition without profile requests", async () => {
+  const teamDuelData = {
+    teams: [
+      {
+        id: "team-1",
+        players: [
+          {
+            playerId: "user-3",
+            nick: "Mate",
+            guesses: [{ score: 1000 }],
+            progressChange: {
+              rankedTeamDuelsProgress: {
+                ratingBefore: 1200,
+                ratingAfter: 1215,
+                ratingChange: 15,
+              },
+            },
+          },
+          {
+            playerId: "user-1",
+            nick: "Me",
+            guesses: [{ score: 1000 }],
+            progressChange: {
+              rankedTeamDuelsProgress: {
+                ratingBefore: 1200,
+                ratingAfter: 1215,
+                ratingChange: 15,
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: "team-2",
+        players: [
+          { playerId: "user-4", nick: "Rival A" },
+          { playerId: "user-5", nick: "Rival B" },
+        ],
+      },
+    ],
+    rounds: [{ startTime: "2026-11-19T12:00:00.000Z", endTime: "2026-11-19T12:00:20.000Z" }],
+    currentRoundNumber: 1,
+    options: { isRated: true, competitiveGameMode: "TeamDuels" },
+    result: { winningTeamId: "team-1" },
+  };
+  let userRequests = 0;
+  setFetch((url) => {
+    if (url.includes("/api/v3/users/")) {
+      userRequests++;
+      return new Response(null, { status: 429 });
+    }
+    return new Response(JSON.stringify(teamDuelData), { status: 200 });
+  });
+  const result = await hydrateGameDetails("team-game", "user-1");
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(userRequests, 0);
+  assert.equal(result.details.isTeamDuel, true);
+  assert.equal(result.details.teamKey, "user-1:user-3");
+  assert.deepEqual(result.details.teammateIds, ["user-3"]);
+  assert.deepEqual(result.details.teammateNicks, ["Mate"]);
+  assert.equal(result.details.ratingBefore, 1200);
+  assert.equal(result.details.ratingAfter, 1215);
+  assert.equal(result.details.ratingChange, 15);
+  assert.equal(result.details.gameModeRatingAfter, undefined);
+  assert.equal(result.details.win, true);
+  assert.equal(result.details.opponent, "Rival A & Rival B");
+});

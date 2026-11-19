@@ -23,6 +23,12 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((item): item is string => typeof item === "string" && !!item);
+  return values.length ? values : undefined;
+}
+
 function asNumber(value: unknown): number | undefined {
   const number = toFiniteNumber(value);
   return number === null ? undefined : number;
@@ -61,6 +67,13 @@ function normalizeRecord(value: unknown): GameRecord | null {
     source.source === "websocket" || source.source === "hydration" || source.source === "feed"
       ? source.source
       : "feed";
+  const isTeamDuel = source.isTeamDuel === true;
+  const teamKey = asString(source.teamKey);
+  const hydration = normalizeHydration(source.hydration, updatedAt);
+  if (isTeamDuel && !teamKey && hydration.state === "ok") {
+    hydration.state = "pending";
+    hydration.attempts = 0;
+  }
   return {
     gameId,
     userId,
@@ -68,9 +81,14 @@ function normalizeRecord(value: unknown): GameRecord | null {
     modeKey,
     mode: asString(source.mode) || formatModeName(modeKey, isRated),
     isRated,
-    isTeamDuel: source.isTeamDuel === true,
+    isTeamDuel,
     opponent: asString(source.opponent),
     opponentId: asString(source.opponentId),
+    teamKey,
+    teamPlayerIds: asStringArray(source.teamPlayerIds),
+    teamPlayerNicks: asStringArray(source.teamPlayerNicks),
+    teammateIds: asStringArray(source.teammateIds),
+    teammateNicks: asStringArray(source.teammateNicks),
     win: typeof source.win === "boolean" ? source.win : undefined,
     ratingBefore: asNumber(source.ratingBefore),
     ratingAfter: asNumber(source.ratingAfter),
@@ -79,7 +97,7 @@ function normalizeRecord(value: unknown): GameRecord | null {
     mmi: asNullableNumber(source.mmi),
     avgScore: asNullableNumber(source.avgScore),
     avgTime: asNullableNumber(source.avgTime),
-    hydration: normalizeHydration(source.hydration, updatedAt),
+    hydration,
     updatedAt,
     source: sourceValue,
   };
@@ -108,6 +126,11 @@ function mergeRecord(existing: GameRecord, incoming: GameRecord): GameRecord {
   } as GameRecord;
   if (incoming.opponent === undefined) merged.opponent = existing.opponent;
   if (incoming.opponentId === undefined) merged.opponentId = existing.opponentId;
+  if (incoming.teamKey === undefined) merged.teamKey = existing.teamKey;
+  if (incoming.teamPlayerIds === undefined) merged.teamPlayerIds = existing.teamPlayerIds;
+  if (incoming.teamPlayerNicks === undefined) merged.teamPlayerNicks = existing.teamPlayerNicks;
+  if (incoming.teammateIds === undefined) merged.teammateIds = existing.teammateIds;
+  if (incoming.teammateNicks === undefined) merged.teammateNicks = existing.teammateNicks;
   if (incoming.win === undefined) merged.win = existing.win;
   if (incoming.ratingBefore === undefined) merged.ratingBefore = existing.ratingBefore;
   if (incoming.ratingAfter === undefined) merged.ratingAfter = existing.ratingAfter;

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getChartData, groupCandles, metricValue, movingAverage } from "../src/chart-data.js";
+import {
+  getChartData,
+  getTeamOptions,
+  groupCandles,
+  metricValue,
+  movingAverage,
+} from "../src/chart-data.js";
 import type { GameRecord } from "../src/types.js";
 
 function record(overrides: Partial<GameRecord> = {}): GameRecord {
@@ -86,4 +92,48 @@ test("candles and moving averages aggregate finite values", () => {
   assert.equal(candles[0].close, 300);
   assert.equal(candles[0].count, 2);
   assert.deepEqual(movingAverage([1, 2, 3, 4], 2), [1, 1.5, 2.5, 3.5]);
+});
+
+test("team graph filters by team composition and uses team rating", () => {
+  const solo = record({ gameId: "solo-1" });
+  const teamA = record({
+    gameId: "team-a",
+    isTeamDuel: true,
+    modeKey: "TeamDuels",
+    mode: "Team",
+    teamKey: "me:alice",
+    teammateIds: ["alice"],
+    teammateNicks: ["Alice"],
+    ratingAfter: 1500,
+  });
+  const teamB = record({
+    gameId: "team-b",
+    isTeamDuel: true,
+    modeKey: "TeamDuels",
+    mode: "Team",
+    teamKey: "me:bob",
+    teammateIds: ["bob"],
+    teammateNicks: ["Bob"],
+    ratingAfter: 1400,
+  });
+  const records = [solo, teamA, teamB];
+  const base = {
+    timeframe: "All" as const,
+    metric: "ratingAfter" as const,
+    typeFilter: "Ranked" as const,
+    modeFilter: "All" as const,
+    queue: "team" as const,
+    teamKey: "me:alice",
+  };
+  const filtered = getChartData(records, base, Date.parse("2026-11-20T00:00:00.000Z"));
+  assert.deepEqual(
+    filtered.map((point) => point.gameId),
+    ["team-a"],
+  );
+  assert.equal(filtered[0]?.value, 1500);
+  assert.equal(filtered[0]?.teamLabel, "You + Alice");
+  assert.deepEqual(
+    getTeamOptions(records).map((team) => team.label),
+    ["You + Alice", "You + Bob"],
+  );
 });

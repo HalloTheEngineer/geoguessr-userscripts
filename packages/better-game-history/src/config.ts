@@ -5,16 +5,18 @@ export type GraphTimeframe = "24h" | "7d" | "30d" | "All";
 export type GraphType = "Ranked" | "Unranked" | "All";
 export type GraphMode = "NMPZ" | "NM" | "Moving" | "All";
 export type CandleMode = "none" | "hourly" | "daily" | "monthly";
+export type GraphQueue = "solo" | "team";
 
 export interface BetterGameHistoryConfig {
   enabled: boolean;
   showDrawer: boolean;
   historyLimit: number;
-  feedTargetGames: number;
+  rankedTargetPerQueue: number;
   defaultMetric: GraphMetric;
   defaultTimeframe: GraphTimeframe;
   defaultTypeFilter: GraphType;
   defaultModeFilter: GraphMode;
+  defaultQueue: GraphQueue;
   defaultShowTrend: boolean;
   defaultCandleMode: CandleMode;
 }
@@ -42,21 +44,21 @@ export const betterGameHistoryConfig = defineConfig<BetterGameHistoryConfig>({
     historyLimit: {
       type: "number",
       default: 2000,
-      min: 200,
+      min: 600,
       max: 5000,
       step: 100,
       label: "Maximum stored games",
       section: "history",
       order: 10,
     },
-    feedTargetGames: {
+    rankedTargetPerQueue: {
       type: "number",
-      default: 200,
+      default: 300,
       min: 50,
-      max: 5000,
+      max: 2000,
       step: 50,
-      label: "Games to backfill",
-      hint: "Fetch older games until this many are available or the feed history is exhausted.",
+      label: "Ranked games per queue",
+      hint: "Backfill this many ranked solo and ranked team duels. Unranked games are recorded only during live play.",
       section: "history",
       order: 11,
     },
@@ -112,19 +114,30 @@ export const betterGameHistoryConfig = defineConfig<BetterGameHistoryConfig>({
         { value: "All", label: "All" },
       ],
     },
+    defaultQueue: {
+      type: "select",
+      default: "solo",
+      label: "Default graph queue",
+      section: "graph",
+      order: 24,
+      options: [
+        { value: "solo", label: "Solo ranked" },
+        { value: "team", label: "Team ranked" },
+      ],
+    },
     defaultShowTrend: {
       type: "boolean",
       default: false,
       label: "Show trend line by default",
       section: "graph",
-      order: 24,
+      order: 25,
     },
     defaultCandleMode: {
       type: "select",
       default: "none",
       label: "Default view",
       section: "graph",
-      order: 25,
+      order: 26,
       options: [
         { value: "none", label: "Points" },
         { value: "hourly", label: "Hourly candles" },

@@ -21,6 +21,8 @@ interface FeedActivity {
   [key: string]: unknown;
 }
 
+type RankedQueue = "solo" | "team";
+
 export type FeedStopReason =
   | "target"
   | "known-frontier"
@@ -33,7 +35,7 @@ export interface FeedSyncOptions {
   userId: string;
   repository: HistoryRepository;
   limit: number;
-  targetGames: number;
+  targetPerQueue: number;
   signal?: AbortSignal;
   onUpdate: () => void;
 }
@@ -41,11 +43,15 @@ export interface FeedSyncOptions {
 export interface FeedSyncResult {
   added: number;
   pages: number;
-  total: number;
+  solo: number;
+  team: number;
   target: number;
+  soloTargetReached: boolean;
+  teamTargetReached: boolean;
   targetReached: boolean;
   exhausted: boolean;
   stopReason: FeedStopReason;
+  ignoredUnranked: number;
 }
 
 const MAX_PAGES = 1000;
@@ -67,30 +73,40 @@ function parsePayload(value: unknown): FeedPayload | null {
     : null;
 }
 
+function rankedQueue(payload: FeedPayload): RankedQueue | null {
+  const mode = payload.gameMode;
+  if (mode === "TeamDuels") return "team";
+  if (
+    mode === "Duels" ||
+    mode === "StandardDuels" ||
+    mode === "NoMoveDuels" ||
+    mode === "NmpzDuels"
+  )
+    return "solo";
+  return null;
+}
+
 function payloadToRecord(
   payload: FeedPayload,
   entryTime: string | undefined,
   userId: string,
+  queue: RankedQueue,
 ): GameRecord | null {
   if (typeof payload.gameId !== "string" || !payload.gameId) return null;
   const timeValue = payload.time || entryTime;
   if (!timeValue || Number.isNaN(new Date(timeValue).getTime())) return null;
   const modeKey = payload.competitiveGameMode || payload.gameMode || "Moving";
-  const isRated = payload.isRated !== false && payload.options?.isRated !== false;
-  const ratingBefore = toFiniteNumber(payload.ratingBefore);
-  const ratingAfter = toFiniteNumber(payload.ratingAfter);
-  const ratingChange = toFiniteNumber(payload.ratingChange);
   return {
     gameId: payload.gameId,
     userId,
     time: timeValue,
     modeKey,
-    mode: formatModeName(modeKey, isRated),
-    isRated,
-    isTeamDuel: false,
-    ratingBefore: ratingBefore === null ? undefined : ratingBefore,
-    ratingAfter: ratingAfter === null ? undefined : ratingAfter,
-    ratingChange: ratingChange === null ? undefined : ratingChange,
+    mode: formatModeName(modeKey, true),
+    isRated: true,
+    isTeamDuel: queue === "team",
+    ratingBefore: toFiniteNumber(payload.ratingBefore) ?? undefined,
+    ratingAfter: toFiniteNumber(payload.ratingAfter) ?? undefined,
+    ratingChange: toFiniteNumber(payload.ratingChange) ?? undefined,
     hydration: { state: "pending", attempts: 0 },
     updatedAt: new Date().toISOString(),
     source: "feed",
@@ -98,29 +114,48 @@ function payloadToRecord(
 }
 
 export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult> {
-  const { userId, repository, limit, targetGames, signal, onUpdate } = options;
-  const target = Math.max(1, Math.min(Math.floor(targetGames), Math.floor(limit)));
-  const known = new Set(repository.get(userId, limit).map((record) => record.gameId));
-  const backfill = known.size < target;
-  let encounteredKnown = false;
+  const { userId, repository, limit, targetPerQueue, signal, onUpdate } = options;
+  const target = Math.max(1, Math.min(Math.floor(targetPerQueue), Math.floor(limit / 2)));
+  const existing = repository.get(userId, limit);
+  const knownAll = new Set(existing.map((record) => record.gameId));
+  const knownSolo = new Set(
+    existing
+      .filter((record) => record.isRated && !record.isTeamDuel)
+      .map((record) => record.gameId),
+  );
+  const knownTeam = new Set(
+    existing.filter((record) => record.isRated && record.isTeamDuel).map((record) => record.gameId),
+  );
+  const backfillSolo = knownSolo.size < target;
+  const backfillTeam = knownTeam.size < target;
+  let encounteredKnownSolo = false;
+  let encounteredKnownTeam = false;
   const seenTokens = new Set<string>();
-  const maxPages = Math.max(50, Math.min(MAX_PAGES, target * 2));
+  const maxPages = Math.max(50, Math.min(MAX_PAGES, target * 4));
   let token: string | null = null;
   let added = 0;
   let pages = 0;
+  let ignoredUnranked = 0;
   let exhausted = false;
   let stopReason: FeedStopReason = "page-limit";
 
-  const processGame = (value: unknown, entryTime: string | undefined): boolean => {
+  const processGame = (
+    value: unknown,
+    entryTime: string | undefined,
+    queue: RankedQueue,
+  ): boolean => {
     const payload = parsePayload(value);
     if (!payload) return false;
-    const record = payloadToRecord(payload, entryTime, userId);
+    const record = payloadToRecord(payload, entryTime, userId, queue);
     if (!record) return false;
-    if (known.has(record.gameId)) {
-      encounteredKnown = true;
+    if (knownAll.has(record.gameId)) {
+      if (queue === "solo") encounteredKnownSolo = true;
+      else encounteredKnownTeam = true;
       return false;
     }
-    known.add(record.gameId);
+    knownAll.add(record.gameId);
+    if (queue === "solo") knownSolo.add(record.gameId);
+    else knownTeam.add(record.gameId);
     repository.merge(record, limit);
     added++;
     return true;
@@ -134,6 +169,11 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
     const type = typeof activity.type === "number" ? activity.type : Number(activity.type);
     const entryTime = typeof activity.time === "string" ? activity.time : fallbackTime;
 
+    if (type === 11) {
+      ignoredUnranked++;
+      return false;
+    }
+
     if (type === 7) {
       if (depth > 0) return false;
       const list = parseJsonValue(activity.payload);
@@ -143,7 +183,9 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
         if (!item || typeof item !== "object") continue;
         const nested = item as FeedActivity;
         if (nested.type === undefined) {
-          if (processGame(nested, entryTime)) found = true;
+          const raw = parsePayload(nested);
+          const queue = raw ? rankedQueue(raw) : null;
+          if (queue && processGame(raw, entryTime, queue)) found = true;
         } else if (processActivity(nested, entryTime, depth + 1)) {
           found = true;
         }
@@ -151,7 +193,7 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
       return found;
     }
 
-    if (type !== 6 && type !== 11) return false;
+    if (type !== 6) return false;
     const value = parseJsonValue(activity.payload);
     if (Array.isArray(value)) {
       let found = false;
@@ -159,14 +201,19 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
         if (!item || typeof item !== "object") continue;
         const nested = item as FeedActivity;
         if (nested.type === undefined) {
-          if (processGame(nested, entryTime)) found = true;
+          const raw = parsePayload(nested);
+          const queue = raw ? rankedQueue(raw) : null;
+          if (queue && processGame(raw, entryTime, queue)) found = true;
         } else if (processActivity(nested, entryTime, depth + 1)) {
           found = true;
         }
       }
       return found;
     }
-    return processGame(value, entryTime);
+    const payload = parsePayload(value);
+    if (!payload) return false;
+    const queue = rankedQueue(payload);
+    return queue ? processGame(payload, entryTime, queue) : false;
   };
 
   while (pages < maxPages) {
@@ -180,7 +227,8 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
       break;
     }
 
-    encounteredKnown = false;
+    encounteredKnownSolo = false;
+    encounteredKnownTeam = false;
     let pageAdded = 0;
     for (const entry of entries) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -188,12 +236,10 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
     }
 
     if (pageAdded) onUpdate();
-    if (backfill && known.size >= target) {
-      stopReason = "target";
-      break;
-    }
-    if (!backfill && encounteredKnown) {
-      stopReason = "known-frontier";
+    const soloSettled = backfillSolo ? knownSolo.size >= target : encounteredKnownSolo;
+    const teamSettled = backfillTeam ? knownTeam.size >= target : encounteredKnownTeam;
+    if (soloSettled && teamSettled) {
+      stopReason = !backfillSolo || !backfillTeam ? "known-frontier" : "target";
       break;
     }
     if (!page.paginationToken) {
@@ -210,13 +256,19 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
     await sleep(200, signal);
   }
 
+  const soloTargetReached = knownSolo.size >= target;
+  const teamTargetReached = knownTeam.size >= target;
   return {
     added,
     pages,
-    total: known.size,
+    solo: knownSolo.size,
+    team: knownTeam.size,
     target,
-    targetReached: known.size >= target,
+    soloTargetReached,
+    teamTargetReached,
+    targetReached: soloTargetReached && teamTargetReached,
     exhausted,
     stopReason,
+    ignoredUnranked,
   };
 }

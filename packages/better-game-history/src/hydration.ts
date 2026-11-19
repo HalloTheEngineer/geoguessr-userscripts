@@ -1,19 +1,23 @@
-import { duel, HttpError, user } from "gg-kit";
+import { duel, HttpError } from "gg-kit";
 import { formatModeName, toFiniteNumber } from "./format.js";
 import type { GameDetails, HydrationResult } from "./types.js";
+
+interface DuelProgress {
+  ratingBefore?: number;
+  ratingAfter?: number;
+  ratingChange?: number;
+  gameModeRatingAfter?: number;
+  gameMode?: string;
+}
 
 interface DuelPlayer {
   playerId?: string;
   nick?: string;
   guesses?: Array<{ score?: number }>;
   progressChange?: {
-    rankedSystemProgress?: {
-      ratingBefore?: number;
-      ratingAfter?: number;
-      ratingChange?: number;
-      gameModeRatingAfter?: number;
-      gameMode?: string;
-    };
+    rankedSystemProgress?: DuelProgress;
+    rankedTeamDuelsProgress?: DuelProgress;
+    competitiveProgress?: DuelProgress;
   };
 }
 
@@ -40,10 +44,6 @@ interface DuelResponse {
   result?: { winningTeamId?: string };
 }
 
-interface UserProfile {
-  nick?: string;
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
@@ -59,30 +59,6 @@ function errorMessage(error: unknown): string {
 
 function isHttpError(error: unknown): error is HttpError {
   return error instanceof HttpError;
-}
-
-async function opponentNames(team: DuelTeam, signal?: AbortSignal): Promise<string[]> {
-  const names = await Promise.all(
-    (team.players || []).map(async (player) => {
-      if (typeof player.nick === "string" && player.nick && player.nick !== "undefined") {
-        return player.nick;
-      }
-      if (!player.playerId) return null;
-      try {
-        abortIfNeeded(signal);
-        const profile = await user<UserProfile>(player.playerId);
-        abortIfNeeded(signal);
-        return typeof profile.nick === "string" && profile.nick && profile.nick !== "undefined"
-          ? profile.nick
-          : null;
-      } catch (error) {
-        if (isAbortError(error)) throw error;
-        if (isHttpError(error) && error.status === 404) return "Deleted User";
-        return null;
-      }
-    }),
-  );
-  return names.filter((name): name is string => !!name);
 }
 
 function weightedMultiplier(
@@ -127,11 +103,11 @@ export async function hydrateGameDetails(
     const opponentTeam = teams.find((team) => team !== myTeam);
     if (!opponentTeam) return { status: "retry", error: "opponent team was not found" };
 
-    const names = await opponentNames(opponentTeam, signal);
-    const opponent = names.join(" & ") || "Unknown Opponent";
-    const opponentId = (opponentTeam.players || []).find((player) => player.playerId)?.playerId;
-
-    const progress = me.progressChange?.rankedSystemProgress;
+    const isTeamDuel = teams.some((team) => (team.players || []).length > 1);
+    const isRated = data.options?.isRated !== false;
+    const progress = isTeamDuel
+      ? me.progressChange?.rankedTeamDuelsProgress || me.progressChange?.competitiveProgress
+      : me.progressChange?.rankedSystemProgress || me.progressChange?.competitiveProgress;
     const ratingBefore = toFiniteNumber(progress?.ratingBefore) ?? undefined;
     const ratingAfter = toFiniteNumber(progress?.ratingAfter) ?? undefined;
     const derivedChange =
@@ -140,10 +116,32 @@ export async function hydrateGameDetails(
         : undefined;
     const ratingChange =
       toFiniteNumber(progress?.ratingChange) ?? toFiniteNumber(derivedChange) ?? undefined;
-    const gameModeRatingAfter = toFiniteNumber(progress?.gameModeRatingAfter) ?? undefined;
-    const isRated = data.options?.isRated !== false;
+    const gameModeRatingAfter = isTeamDuel
+      ? undefined
+      : (toFiniteNumber(progress?.gameModeRatingAfter) ?? undefined);
     const modeKey =
-      progress?.gameMode || data.options?.competitiveGameMode || data.options?.gameMode || "Moving";
+      data.options?.competitiveGameMode ||
+      data.options?.gameMode ||
+      progress?.gameMode ||
+      (isTeamDuel ? "TeamDuels" : "Duels");
+
+    const myPlayers = myTeam.players || [];
+    const teamPlayerIds = myPlayers
+      .map((player) => player.playerId)
+      .filter((playerId): playerId is string => !!playerId);
+    const teamPlayerNicks = myPlayers.map((player) => player.nick || player.playerId || "Unknown");
+    const teammateIds = teamPlayerIds.filter((playerId) => playerId !== userId);
+    const teammateNicks = myPlayers
+      .filter((player) => player.playerId !== userId)
+      .map((player) => player.nick || player.playerId || "Unknown");
+    const teamKey = teamPlayerIds.length ? [...teamPlayerIds].sort().join(":") : undefined;
+
+    const opponentNames = (opponentTeam.players || []).map(
+      (player) => player.nick || player.playerId || "Unknown",
+    );
+    const opponent =
+      opponentNames.filter((name) => name !== "Unknown").join(" & ") || "Unknown Opponent";
+    const opponentId = (opponentTeam.players || []).find((player) => player.playerId)?.playerId;
 
     const scores = (me.guesses || [])
       .map((guess) => toFiniteNumber(guess.score))
@@ -183,11 +181,16 @@ export async function hydrateGameDetails(
     const details: GameDetails = {
       opponent,
       opponentId,
+      teamKey,
+      teamPlayerIds,
+      teamPlayerNicks,
+      teammateIds,
+      teammateNicks,
       win,
       modeKey,
       mode: formatModeName(modeKey, isRated),
       isRated,
-      isTeamDuel: teams.some((team) => (team.players || []).length > 1),
+      isTeamDuel,
       ratingBefore,
       ratingAfter,
       gameModeRatingAfter,

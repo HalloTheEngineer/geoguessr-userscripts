@@ -1612,9 +1612,6 @@
   async function duel(gameId2) {
     return fetchJson(`${API.duelServer}${encodeURIComponent(gameId2)}`);
   }
-  async function user(userId) {
-    return fetchJson(`${API.users}${encodeURIComponent(userId)}`);
-  }
 
   // ../gg-kit/src/storage/list-store.ts
   function storageArea(area2) {
@@ -1887,21 +1884,21 @@
       historyLimit: {
         type: "number",
         default: 2e3,
-        min: 200,
+        min: 600,
         max: 5e3,
         step: 100,
         label: "Maximum stored games",
         section: "history",
         order: 10
       },
-      feedTargetGames: {
+      rankedTargetPerQueue: {
         type: "number",
-        default: 200,
+        default: 300,
         min: 50,
-        max: 5e3,
+        max: 2e3,
         step: 50,
-        label: "Games to backfill",
-        hint: "Fetch older games until this many are available or the feed history is exhausted.",
+        label: "Ranked games per queue",
+        hint: "Backfill this many ranked solo and ranked team duels. Unranked games are recorded only during live play.",
         section: "history",
         order: 11
       },
@@ -1957,19 +1954,30 @@
           { value: "All", label: "All" }
         ]
       },
+      defaultQueue: {
+        type: "select",
+        default: "solo",
+        label: "Default graph queue",
+        section: "graph",
+        order: 24,
+        options: [
+          { value: "solo", label: "Solo ranked" },
+          { value: "team", label: "Team ranked" }
+        ]
+      },
       defaultShowTrend: {
         type: "boolean",
         default: false,
         label: "Show trend line by default",
         section: "graph",
-        order: 24
+        order: 25
       },
       defaultCandleMode: {
         type: "select",
         default: "none",
         label: "Default view",
         section: "graph",
-        order: 25,
+        order: 26,
         options: [
           { value: "none", label: "Points" },
           { value: "hourly", label: "Hourly candles" },
@@ -2265,54 +2273,70 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const parsed = parseJsonValue(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
   }
-  function payloadToRecord(payload, entryTime, userId) {
+  function rankedQueue(payload) {
+    const mode = payload.gameMode;
+    if (mode === "TeamDuels") return "team";
+    if (mode === "Duels" || mode === "StandardDuels" || mode === "NoMoveDuels" || mode === "NmpzDuels")
+      return "solo";
+    return null;
+  }
+  function payloadToRecord(payload, entryTime, userId, queue) {
     if (typeof payload.gameId !== "string" || !payload.gameId) return null;
     const timeValue = payload.time || entryTime;
     if (!timeValue || Number.isNaN(new Date(timeValue).getTime())) return null;
     const modeKey = payload.competitiveGameMode || payload.gameMode || "Moving";
-    const isRated = payload.isRated !== false && payload.options?.isRated !== false;
-    const ratingBefore = toFiniteNumber(payload.ratingBefore);
-    const ratingAfter = toFiniteNumber(payload.ratingAfter);
-    const ratingChange = toFiniteNumber(payload.ratingChange);
     return {
       gameId: payload.gameId,
       userId,
       time: timeValue,
       modeKey,
-      mode: formatModeName(modeKey, isRated),
-      isRated,
-      isTeamDuel: false,
-      ratingBefore: ratingBefore === null ? void 0 : ratingBefore,
-      ratingAfter: ratingAfter === null ? void 0 : ratingAfter,
-      ratingChange: ratingChange === null ? void 0 : ratingChange,
+      mode: formatModeName(modeKey, true),
+      isRated: true,
+      isTeamDuel: queue === "team",
+      ratingBefore: toFiniteNumber(payload.ratingBefore) ?? void 0,
+      ratingAfter: toFiniteNumber(payload.ratingAfter) ?? void 0,
+      ratingChange: toFiniteNumber(payload.ratingChange) ?? void 0,
       hydration: { state: "pending", attempts: 0 },
       updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
       source: "feed"
     };
   }
   async function syncFeed(options) {
-    const { userId, repository, limit, targetGames, signal, onUpdate } = options;
-    const target = Math.max(1, Math.min(Math.floor(targetGames), Math.floor(limit)));
-    const known = new Set(repository.get(userId, limit).map((record) => record.gameId));
-    const backfill = known.size < target;
-    let encounteredKnown = false;
+    const { userId, repository, limit, targetPerQueue, signal, onUpdate } = options;
+    const target = Math.max(1, Math.min(Math.floor(targetPerQueue), Math.floor(limit / 2)));
+    const existing = repository.get(userId, limit);
+    const knownAll = new Set(existing.map((record) => record.gameId));
+    const knownSolo = new Set(
+      existing.filter((record) => record.isRated && !record.isTeamDuel).map((record) => record.gameId)
+    );
+    const knownTeam = new Set(
+      existing.filter((record) => record.isRated && record.isTeamDuel).map((record) => record.gameId)
+    );
+    const backfillSolo = knownSolo.size < target;
+    const backfillTeam = knownTeam.size < target;
+    let encounteredKnownSolo = false;
+    let encounteredKnownTeam = false;
     const seenTokens = /* @__PURE__ */ new Set();
-    const maxPages = Math.max(50, Math.min(MAX_PAGES, target * 2));
+    const maxPages = Math.max(50, Math.min(MAX_PAGES, target * 4));
     let token = null;
     let added = 0;
     let pages = 0;
+    let ignoredUnranked = 0;
     let exhausted = false;
     let stopReason = "page-limit";
-    const processGame = (value, entryTime) => {
+    const processGame = (value, entryTime, queue) => {
       const payload = parsePayload(value);
       if (!payload) return false;
-      const record = payloadToRecord(payload, entryTime, userId);
+      const record = payloadToRecord(payload, entryTime, userId, queue);
       if (!record) return false;
-      if (known.has(record.gameId)) {
-        encounteredKnown = true;
+      if (knownAll.has(record.gameId)) {
+        if (queue === "solo") encounteredKnownSolo = true;
+        else encounteredKnownTeam = true;
         return false;
       }
-      known.add(record.gameId);
+      knownAll.add(record.gameId);
+      if (queue === "solo") knownSolo.add(record.gameId);
+      else knownTeam.add(record.gameId);
       repository.merge(record, limit);
       added++;
       return true;
@@ -2320,6 +2344,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const processActivity = (activity, fallbackTime, depth = 0) => {
       const type = typeof activity.type === "number" ? activity.type : Number(activity.type);
       const entryTime = typeof activity.time === "string" ? activity.time : fallbackTime;
+      if (type === 11) {
+        ignoredUnranked++;
+        return false;
+      }
       if (type === 7) {
         if (depth > 0) return false;
         const list = parseJsonValue(activity.payload);
@@ -2329,14 +2357,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           if (!item || typeof item !== "object") continue;
           const nested = item;
           if (nested.type === void 0) {
-            if (processGame(nested, entryTime)) found = true;
+            const raw = parsePayload(nested);
+            const queue2 = raw ? rankedQueue(raw) : null;
+            if (queue2 && processGame(raw, entryTime, queue2)) found = true;
           } else if (processActivity(nested, entryTime, depth + 1)) {
             found = true;
           }
         }
         return found;
       }
-      if (type !== 6 && type !== 11) return false;
+      if (type !== 6) return false;
       const value = parseJsonValue(activity.payload);
       if (Array.isArray(value)) {
         let found = false;
@@ -2344,14 +2374,19 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           if (!item || typeof item !== "object") continue;
           const nested = item;
           if (nested.type === void 0) {
-            if (processGame(nested, entryTime)) found = true;
+            const raw = parsePayload(nested);
+            const queue2 = raw ? rankedQueue(raw) : null;
+            if (queue2 && processGame(raw, entryTime, queue2)) found = true;
           } else if (processActivity(nested, entryTime, depth + 1)) {
             found = true;
           }
         }
         return found;
       }
-      return processGame(value, entryTime);
+      const payload = parsePayload(value);
+      if (!payload) return false;
+      const queue = rankedQueue(payload);
+      return queue ? processGame(payload, entryTime, queue) : false;
     };
     while (pages < maxPages) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -2363,19 +2398,18 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         stopReason = "empty";
         break;
       }
-      encounteredKnown = false;
+      encounteredKnownSolo = false;
+      encounteredKnownTeam = false;
       let pageAdded = 0;
       for (const entry of entries) {
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
         if (processActivity(entry, void 0)) pageAdded++;
       }
       if (pageAdded) onUpdate();
-      if (backfill && known.size >= target) {
-        stopReason = "target";
-        break;
-      }
-      if (!backfill && encounteredKnown) {
-        stopReason = "known-frontier";
+      const soloSettled = backfillSolo ? knownSolo.size >= target : encounteredKnownSolo;
+      const teamSettled = backfillTeam ? knownTeam.size >= target : encounteredKnownTeam;
+      if (soloSettled && teamSettled) {
+        stopReason = !backfillSolo || !backfillTeam ? "known-frontier" : "target";
         break;
       }
       if (!page.paginationToken) {
@@ -2391,14 +2425,20 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       token = page.paginationToken;
       await sleep2(200, signal);
     }
+    const soloTargetReached = knownSolo.size >= target;
+    const teamTargetReached = knownTeam.size >= target;
     return {
       added,
       pages,
-      total: known.size,
+      solo: knownSolo.size,
+      team: knownTeam.size,
       target,
-      targetReached: known.size >= target,
+      soloTargetReached,
+      teamTargetReached,
+      targetReached: soloTargetReached && teamTargetReached,
       exhausted,
-      stopReason
+      stopReason,
+      ignoredUnranked
     };
   }
 
@@ -16999,18 +17039,45 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const windowMs = timeframe === "24h" ? 864e5 : timeframe === "7d" ? 7 * 864e5 : 30 * 864e5;
     return timestamp >= now - windowMs;
   }
+  function getTeamOptions(records) {
+    const teams = /* @__PURE__ */ new Map();
+    for (const record of records) {
+      if (!record.isTeamDuel || !record.teamKey) continue;
+      const existing = teams.get(record.teamKey);
+      if (existing) {
+        existing.count++;
+        continue;
+      }
+      const teammates = (record.teammateNicks || []).filter((nick) => nick && nick !== record.userId);
+      const label = teammates.length ? `You + ${teammates.join(" & ")}` : "Your team";
+      teams.set(record.teamKey, { key: record.teamKey, label, count: 1 });
+    }
+    return [...teams.values()].sort(
+      (left, right) => right.count - left.count || left.label.localeCompare(right.label)
+    );
+  }
   function getChartData(records, filters, now = Date.now()) {
     const points = [];
+    const queue = filters.queue || "solo";
     for (const record of records) {
-      if (record.hydration.state !== "ok" || record.isTeamDuel) continue;
+      if (record.hydration.state !== "ok") continue;
+      if (queue === "solo" && record.isTeamDuel) continue;
+      if (queue === "team" && !record.isTeamDuel) continue;
+      if (queue === "team" && filters.teamKey && record.teamKey !== filters.teamKey) continue;
       if (!inTimeframe(record.time, filters.timeframe, now)) continue;
       if (filters.typeFilter === "Ranked" && !record.isRated) continue;
       if (filters.typeFilter === "Unranked" && record.isRated) continue;
-      if (filters.modeFilter !== "All" && recordModeGroup(record) !== filters.modeFilter) continue;
-      const value = metricValue(record, filters.metric, filters.modeFilter);
+      if (queue === "solo" && filters.modeFilter !== "All" && recordModeGroup(record) !== filters.modeFilter)
+        continue;
+      const value = metricValue(
+        record,
+        filters.metric,
+        queue === "team" ? "All" : filters.modeFilter
+      );
       if (value === null || !Number.isFinite(value)) continue;
       const date = new Date(record.time);
       if (Number.isNaN(date.getTime())) continue;
+      const teammates = (record.teammateNicks || []).join(" & ");
       points.push({
         time: record.time,
         label: pointLabel(date, filters.timeframe),
@@ -17021,7 +17088,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         opponent: record.opponent || "Unknown Opponent",
         mode: record.mode,
         gameId: record.gameId,
-        isTeamDuel: record.isTeamDuel
+        isTeamDuel: record.isTeamDuel,
+        teamKey: record.teamKey,
+        teamLabel: teammates ? `You + ${teammates}` : void 0
       });
     }
     return points.sort(
@@ -17083,6 +17152,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   var STYLE_ID3 = "bgh-graph-styles";
   var FILTERS = [
     {
+      key: "queue",
+      values: [
+        { value: "solo", label: "Solo" },
+        { value: "team", label: "Team" }
+      ]
+    },
+    {
       key: "metric",
       values: [
         { value: "ratingAfter", label: "Rating" },
@@ -17140,6 +17216,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
 .bgh-graph-filter { border: 0; border-radius: 7px; padding: 7px 11px; background: transparent; color: #999; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .bgh-graph-filter.bgh-active { background: #7952e9; color: #fff; }
 .bgh-graph-filter:focus-visible, #bgh-graph-close:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
+.bgh-graph-team { align-items: center; gap: 8px; padding-left: 10px; color: #999; font-size: 10px; font-weight: 800; }
+.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 11px; }
+.bgh-graph-select:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-chart { position: relative; flex: 1; min-height: 420px; }
 .bgh-graph-empty { min-height: 420px; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
 .bgh-graph-note { color: rgba(255,255,255,.5); font-size: 11px; }
@@ -17165,6 +17244,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       metric: "ratingAfter",
       typeFilter: "Ranked",
       modeFilter: "All",
+      queue: "solo",
+      teamKey: "",
       showTrend: false,
       candleMode: "none"
     };
@@ -17185,21 +17266,46 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (!dialog) return;
       chart?.destroy();
       chart = null;
+      const teamOptions = getTeamOptions(records);
+      if (filters.queue === "team") {
+        if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
+          filters.teamKey = teamOptions[0]?.key || "";
+        }
+      } else {
+        filters.teamKey = "";
+      }
       const chartData = getChartData(records, filters);
       const shell = dialog.querySelector("#bgh-graph-shell");
       if (!shell) return;
       const title = shell.querySelector("#bgh-graph-title");
       const toolbar = shell.querySelector(".bgh-graph-toolbar");
       const canvasHost = shell.querySelector(".bgh-graph-chart");
-      if (title) title.textContent = formatMetricLabel(filters.metric, filters.candleMode);
+      if (title) {
+        const label = formatMetricLabel(filters.metric, filters.candleMode);
+        title.textContent = filters.queue === "team" ? `Team ${label}` : label;
+      }
       if (!toolbar || !canvasHost) return;
-      toolbar.innerHTML = FILTERS.map(
+      const groups = FILTERS.filter(
+        (group) => !(filters.queue === "team" && group.key === "modeFilter")
+      );
+      const teamSelect = filters.queue === "team" ? `<div class="bgh-graph-group bgh-graph-team"><span>Team</span>
+            <select id="bgh-team-select" class="bgh-graph-select" ${teamOptions.length ? "" : "disabled"}>
+              ${teamOptions.length ? teamOptions.map(
+        (team) => `<option value="${escapeHtml(team.key)}" ${team.key === filters.teamKey ? "selected" : ""}>${escapeHtml(team.label)} (${team.count})</option>`
+      ).join("") : `<option>No team data yet</option>`}
+            </select>
+          </div>` : "";
+      toolbar.innerHTML = groups.map(
         (group) => filterGroup(
           group.key,
           group.values,
           String(filters[group.key] ?? "")
         )
-      ).join("") + `<div class="bgh-graph-group"><button class="bgh-graph-filter ${filters.showTrend ? "bgh-active" : ""}" type="button" data-trend="1">Trend</button></div>`;
+      ).join("") + teamSelect + `<div class="bgh-graph-group"><button class="bgh-graph-filter ${filters.showTrend ? "bgh-active" : ""}" type="button" data-trend="1">Trend</button></div>`;
+      toolbar.querySelector("#bgh-team-select")?.addEventListener("change", (event) => {
+        filters.teamKey = event.currentTarget.value;
+        render();
+      });
       toolbar.querySelectorAll(".bgh-graph-filter").forEach((button) => {
         button.addEventListener("click", () => {
           if (button.dataset.trend) {
@@ -17210,6 +17316,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           const key = button.dataset.filter;
           const value = button.dataset.value;
           if (!key || value === void 0) return;
+          if (key === "queue") {
+            filters.queue = value;
+            filters.teamKey = "";
+          }
           if (key === "metric") filters.metric = value;
           if (key === "typeFilter") filters.typeFilter = value;
           if (key === "modeFilter") filters.modeFilter = value;
@@ -17221,6 +17331,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           render();
         });
       });
+      const note = shell.querySelector(".bgh-graph-note");
+      if (note) {
+        note.textContent = filters.queue === "team" ? "Team rating is separate from solo rating. Select one team composition at a time." : "Solo ranked duels only. Team duels use the Team queue.";
+      }
       canvasHost.replaceChildren();
       if (!chartData.length) {
         const empty = document.createElement("div");
@@ -17252,13 +17366,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           z: 10
         });
       } else {
-        const groups = groupCandles(chartData, filters.candleMode);
-        labels.push(...groups.map((group) => group.label));
+        const groups2 = groupCandles(chartData, filters.candleMode);
+        labels.push(...groups2.map((group) => group.label));
         if (filters.metric === "gameCount") {
           datasets.push({
             type: "bar",
             label: "Games Played",
-            data: groups.map((group) => group.count),
+            data: groups2.map((group) => group.count),
             backgroundColor: "rgba(121,82,233,.55)",
             borderColor: "#7952e9",
             borderWidth: 2,
@@ -17269,16 +17383,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           datasets.push({
             type: "bar",
             label: "Range",
-            data: groups.map((group) => [group.low, group.high]),
-            backgroundColor: (context2) => groups[context2.dataIndex]?.close >= groups[context2.dataIndex]?.open ? "#4caf50" : "#ff5252",
+            data: groups2.map((group) => [group.low, group.high]),
+            backgroundColor: (context2) => groups2[context2.dataIndex]?.close >= groups2[context2.dataIndex]?.open ? "#4caf50" : "#ff5252",
             barThickness: 2,
             grouped: false
           });
           datasets.push({
             type: "bar",
             label: "Body",
-            data: groups.map((group) => [group.open, group.close]),
-            backgroundColor: (context2) => groups[context2.dataIndex]?.close >= groups[context2.dataIndex]?.open ? "#4caf50" : "#ff5252",
+            data: groups2.map((group) => [group.open, group.close]),
+            backgroundColor: (context2) => groups2[context2.dataIndex]?.close >= groups2[context2.dataIndex]?.open ? "#4caf50" : "#ff5252",
             barPercentage: 0.6,
             grouped: false
           });
@@ -17357,7 +17471,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
               afterLabel: (context2) => {
                 if (filters.candleMode !== "none") return "";
                 const point = chartData[context2.dataIndex];
-                return point ? [`Opponent: ${point.opponent}`, `Mode: ${point.mode}`] : [];
+                if (!point) return [];
+                return [
+                  `${point.teamLabel ? "Team" : "Opponent"}: ${point.teamLabel || point.opponent}`,
+                  `Mode: ${point.mode}`
+                ];
               }
             }
           }
@@ -17407,7 +17525,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     return {
       open(nextRecords, nextFilters) {
         records = nextRecords;
-        filters = { ...nextFilters };
+        filters = {
+          ...nextFilters,
+          queue: nextFilters.queue || "solo",
+          teamKey: nextFilters.teamKey || ""
+        };
         if (filters.metric === "gameCount" && filters.candleMode === "none") {
           filters.candleMode = "daily";
         }
@@ -17433,6 +17555,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   var HYDRATION_STATES = /* @__PURE__ */ new Set(["pending", "ok", "unavailable", "error"]);
   function asString(value) {
     return typeof value === "string" && value.trim() ? value : void 0;
+  }
+  function asStringArray(value) {
+    if (!Array.isArray(value)) return void 0;
+    const values = value.filter((item) => typeof item === "string" && !!item);
+    return values.length ? values : void 0;
   }
   function asNumber(value) {
     const number = toFiniteNumber(value);
@@ -17464,6 +17591,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const modeKey = asString(source.modeKey) || "Moving";
     const isRated = source.isRated !== false;
     const sourceValue = source.source === "websocket" || source.source === "hydration" || source.source === "feed" ? source.source : "feed";
+    const isTeamDuel = source.isTeamDuel === true;
+    const teamKey = asString(source.teamKey);
+    const hydration = normalizeHydration(source.hydration, updatedAt);
+    if (isTeamDuel && !teamKey && hydration.state === "ok") {
+      hydration.state = "pending";
+      hydration.attempts = 0;
+    }
     return {
       gameId: gameId2,
       userId,
@@ -17471,9 +17605,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       modeKey,
       mode: asString(source.mode) || formatModeName(modeKey, isRated),
       isRated,
-      isTeamDuel: source.isTeamDuel === true,
+      isTeamDuel,
       opponent: asString(source.opponent),
       opponentId: asString(source.opponentId),
+      teamKey,
+      teamPlayerIds: asStringArray(source.teamPlayerIds),
+      teamPlayerNicks: asStringArray(source.teamPlayerNicks),
+      teammateIds: asStringArray(source.teammateIds),
+      teammateNicks: asStringArray(source.teammateNicks),
       win: typeof source.win === "boolean" ? source.win : void 0,
       ratingBefore: asNumber(source.ratingBefore),
       ratingAfter: asNumber(source.ratingAfter),
@@ -17482,7 +17621,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       mmi: asNullableNumber(source.mmi),
       avgScore: asNullableNumber(source.avgScore),
       avgTime: asNullableNumber(source.avgTime),
-      hydration: normalizeHydration(source.hydration, updatedAt),
+      hydration,
       updatedAt,
       source: sourceValue
     };
@@ -17505,6 +17644,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     };
     if (incoming.opponent === void 0) merged.opponent = existing.opponent;
     if (incoming.opponentId === void 0) merged.opponentId = existing.opponentId;
+    if (incoming.teamKey === void 0) merged.teamKey = existing.teamKey;
+    if (incoming.teamPlayerIds === void 0) merged.teamPlayerIds = existing.teamPlayerIds;
+    if (incoming.teamPlayerNicks === void 0) merged.teamPlayerNicks = existing.teamPlayerNicks;
+    if (incoming.teammateIds === void 0) merged.teammateIds = existing.teammateIds;
+    if (incoming.teammateNicks === void 0) merged.teammateNicks = existing.teammateNicks;
     if (incoming.win === void 0) merged.win = existing.win;
     if (incoming.ratingBefore === void 0) merged.ratingBefore = existing.ratingBefore;
     if (incoming.ratingAfter === void 0) merged.ratingAfter = existing.ratingAfter;
@@ -17592,27 +17736,6 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   function isHttpError(error) {
     return error instanceof HttpError;
   }
-  async function opponentNames(team, signal) {
-    const names2 = await Promise.all(
-      (team.players || []).map(async (player) => {
-        if (typeof player.nick === "string" && player.nick && player.nick !== "undefined") {
-          return player.nick;
-        }
-        if (!player.playerId) return null;
-        try {
-          abortIfNeeded(signal);
-          const profile = await user(player.playerId);
-          abortIfNeeded(signal);
-          return typeof profile.nick === "string" && profile.nick && profile.nick !== "undefined" ? profile.nick : null;
-        } catch (error) {
-          if (isAbortError(error)) throw error;
-          if (isHttpError(error) && error.status === 404) return "Deleted User";
-          return null;
-        }
-      })
-    );
-    return names2.filter((name) => !!name);
-  }
   function weightedMultiplier(rounds) {
     let totalDamage = 0;
     let weightedDamage = 0;
@@ -17643,17 +17766,26 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (!myTeam || !me) return { status: "retry", error: "current player was not found" };
       const opponentTeam = teams.find((team) => team !== myTeam);
       if (!opponentTeam) return { status: "retry", error: "opponent team was not found" };
-      const names2 = await opponentNames(opponentTeam, signal);
-      const opponent = names2.join(" & ") || "Unknown Opponent";
-      const opponentId = (opponentTeam.players || []).find((player) => player.playerId)?.playerId;
-      const progress = me.progressChange?.rankedSystemProgress;
+      const isTeamDuel = teams.some((team) => (team.players || []).length > 1);
+      const isRated = data.options?.isRated !== false;
+      const progress = isTeamDuel ? me.progressChange?.rankedTeamDuelsProgress || me.progressChange?.competitiveProgress : me.progressChange?.rankedSystemProgress || me.progressChange?.competitiveProgress;
       const ratingBefore = toFiniteNumber(progress?.ratingBefore) ?? void 0;
       const ratingAfter = toFiniteNumber(progress?.ratingAfter) ?? void 0;
       const derivedChange = ratingBefore !== void 0 && ratingAfter !== void 0 ? ratingAfter - ratingBefore : void 0;
       const ratingChange = toFiniteNumber(progress?.ratingChange) ?? toFiniteNumber(derivedChange) ?? void 0;
-      const gameModeRatingAfter = toFiniteNumber(progress?.gameModeRatingAfter) ?? void 0;
-      const isRated = data.options?.isRated !== false;
-      const modeKey = progress?.gameMode || data.options?.competitiveGameMode || data.options?.gameMode || "Moving";
+      const gameModeRatingAfter = isTeamDuel ? void 0 : toFiniteNumber(progress?.gameModeRatingAfter) ?? void 0;
+      const modeKey = data.options?.competitiveGameMode || data.options?.gameMode || progress?.gameMode || (isTeamDuel ? "TeamDuels" : "Duels");
+      const myPlayers = myTeam.players || [];
+      const teamPlayerIds = myPlayers.map((player) => player.playerId).filter((playerId) => !!playerId);
+      const teamPlayerNicks = myPlayers.map((player) => player.nick || player.playerId || "Unknown");
+      const teammateIds = teamPlayerIds.filter((playerId) => playerId !== userId);
+      const teammateNicks = myPlayers.filter((player) => player.playerId !== userId).map((player) => player.nick || player.playerId || "Unknown");
+      const teamKey = teamPlayerIds.length ? [...teamPlayerIds].sort().join(":") : void 0;
+      const opponentNames = (opponentTeam.players || []).map(
+        (player) => player.nick || player.playerId || "Unknown"
+      );
+      const opponent = opponentNames.filter((name) => name !== "Unknown").join(" & ") || "Unknown Opponent";
+      const opponentId = (opponentTeam.players || []).find((player) => player.playerId)?.playerId;
       const scores = (me.guesses || []).map((guess) => toFiniteNumber(guess.score)).filter((score) => score !== null);
       const avgScore = average(scores);
       const rounds = Array.isArray(data.rounds) ? data.rounds : [];
@@ -17675,11 +17807,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const details = {
         opponent,
         opponentId,
+        teamKey,
+        teamPlayerIds,
+        teamPlayerNicks,
+        teammateIds,
+        teammateNicks,
         win,
         modeKey,
         mode: formatModeName(modeKey, isRated),
         isRated,
-        isTeamDuel: teams.some((team) => (team.players || []).length > 1),
+        isTeamDuel,
         ratingBefore,
         ratingAfter,
         gameModeRatingAfter,
@@ -17716,6 +17853,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       metric: config.get("defaultMetric"),
       typeFilter: config.get("defaultTypeFilter"),
       modeFilter: config.get("defaultModeFilter"),
+      queue: config.get("defaultQueue"),
+      teamKey: "",
       showTrend: config.get("defaultShowTrend"),
       candleMode: config.get("defaultCandleMode")
     };
@@ -17738,7 +17877,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       config,
       sections: [
         { id: "general", title: "General", fields: ["enabled", "showDrawer"] },
-        { id: "history", title: "History", fields: ["historyLimit", "feedTargetGames"] },
+        { id: "history", title: "History", fields: ["historyLimit", "rankedTargetPerQueue"] },
         {
           id: "graph",
           title: "Graph defaults",
@@ -17747,6 +17886,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
             "defaultTimeframe",
             "defaultTypeFilter",
             "defaultModeFilter",
+            "defaultQueue",
             "defaultShowTrend",
             "defaultCandleMode"
           ]
@@ -17823,7 +17963,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         void (async () => {
           try {
             while (generation === workGeneration && !signal?.aborted && config.get("enabled")) {
-              const record = repository.pending(id).find((item) => item.hydration.attempts < 4);
+              const pending = repository.pending(id).filter((item) => item.hydration.attempts < 4);
+              const record = pending.find((item) => item.isRated) || pending[0];
               if (!record) break;
               const result = await hydrateGameDetails(record.gameId, id, signal);
               if (generation !== workGeneration || signal?.aborted) break;
@@ -17880,7 +18021,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
               userId: id,
               repository,
               limit: limit(),
-              targetGames: config.get("feedTargetGames"),
+              targetPerQueue: config.get("rankedTargetPerQueue"),
               signal: controller.signal,
               onUpdate: () => {
                 if (generation !== workGeneration) return;
@@ -17888,9 +18029,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
                 startHydration(generation, controller.signal);
               }
             });
-            const feedStatus = result.targetReached ? "target reached" : result.exhausted ? "feed exhausted" : result.stopReason;
+            const feedStatus = result.targetReached ? "both targets reached" : result.exhausted ? "feed exhausted" : result.stopReason;
             context.log(
-              `feed sync added ${result.added} games across ${result.pages} page(s); ${result.total}/${result.target} stored; ${feedStatus}`
+              `feed sync added ${result.added} ranked games across ${result.pages} page(s); solo ${result.solo}/${result.target}, team ${result.team}/${result.target}; ${feedStatus}; skipped ${result.ignoredUnranked} unranked entries`
             );
           } catch (error) {
             if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -17946,7 +18087,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         const opponentTeam = teams.find((team) => team !== myTeam);
         if (!opponentTeam) return;
         const opponent = opponentTeam.players?.[0];
-        const progress = me.progressChange?.rankedSystemProgress;
+        const isTeamDuel = teams.some((team) => (team.players || []).length > 1);
+        const progress = isTeamDuel ? me.progressChange?.rankedTeamDuelsProgress || me.progressChange?.competitiveProgress : me.progressChange?.rankedSystemProgress || me.progressChange?.competitiveProgress;
+        const myPlayers = myTeam.players || [];
+        const teamPlayerIds = myPlayers.map((player) => player.playerId).filter((playerId) => !!playerId);
+        const teamPlayerNicks = myPlayers.map(
+          (player) => player.nick || player.playerId || "Unknown"
+        );
+        const teammateIds = teamPlayerIds.filter((playerId) => playerId !== userId);
+        const teammateNicks = myPlayers.filter((player) => player.playerId !== userId).map((player) => player.nick || player.playerId || "Unknown");
+        const teamKey = teamPlayerIds.length ? [...teamPlayerIds].sort().join(":") : void 0;
         const ratingBefore = toFiniteNumber(progress?.ratingBefore) ?? void 0;
         const ratingAfter = toFiniteNumber(progress?.ratingAfter) ?? void 0;
         const derivedChange = ratingBefore !== void 0 && ratingAfter !== void 0 ? ratingAfter - ratingBefore : void 0;
@@ -17960,9 +18110,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           modeKey,
           mode: formatModeName(modeKey, isRated),
           isRated,
-          isTeamDuel: teams.some((team) => (team.players || []).length > 1),
+          isTeamDuel,
           opponent: typeof opponent?.nick === "string" && opponent.nick !== "undefined" ? opponent.nick : void 0,
           opponentId: opponent?.playerId,
+          teamKey,
+          teamPlayerIds,
+          teamPlayerNicks,
+          teammateIds,
+          teammateNicks,
           win: typeof state2?.result?.winningTeamId === "string" && typeof myTeam.id === "string" ? state2.result.winningTeamId === myTeam.id : void 0,
           ratingBefore,
           ratingAfter,

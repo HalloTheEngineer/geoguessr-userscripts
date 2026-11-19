@@ -1,22 +1,36 @@
 import type { ChartConfiguration } from "chart.js";
 import Chart from "chart.js/auto";
 import { duelSummaryPath, escapeHtml, injectStyle } from "gg-kit";
-import { formatMetricLabel, getChartData, groupCandles, movingAverage } from "./chart-data.js";
+import {
+  formatMetricLabel,
+  getChartData,
+  getTeamOptions,
+  groupCandles,
+  movingAverage,
+} from "./chart-data.js";
 import type {
   CandleMode,
   GameRecord,
   GraphFilters,
   GraphMetric,
   GraphMode,
+  GraphQueue,
   GraphTimeframe,
   GraphType,
 } from "./types.js";
 
 const STYLE_ID = "bgh-graph-styles";
 const FILTERS: Array<{
-  key: "metric" | "typeFilter" | "modeFilter" | "timeframe" | "candleMode";
+  key: "queue" | "metric" | "typeFilter" | "modeFilter" | "timeframe" | "candleMode";
   values: Array<{ value: string; label: string }>;
 }> = [
+  {
+    key: "queue",
+    values: [
+      { value: "solo", label: "Solo" },
+      { value: "team", label: "Team" },
+    ],
+  },
   {
     key: "metric",
     values: [
@@ -76,6 +90,9 @@ const STYLES = `
 .bgh-graph-filter { border: 0; border-radius: 7px; padding: 7px 11px; background: transparent; color: #999; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .bgh-graph-filter.bgh-active { background: #7952e9; color: #fff; }
 .bgh-graph-filter:focus-visible, #bgh-graph-close:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
+.bgh-graph-team { align-items: center; gap: 8px; padding-left: 10px; color: #999; font-size: 10px; font-weight: 800; }
+.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 11px; }
+.bgh-graph-select:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-chart { position: relative; flex: 1; min-height: 420px; }
 .bgh-graph-empty { min-height: 420px; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
 .bgh-graph-note { color: rgba(255,255,255,.5); font-size: 11px; }
@@ -118,6 +135,8 @@ export function createGraphView(): GraphView {
     metric: "ratingAfter",
     typeFilter: "Ranked",
     modeFilter: "All",
+    queue: "solo",
+    teamKey: "",
     showTrend: false,
     candleMode: "none",
   };
@@ -141,23 +160,63 @@ export function createGraphView(): GraphView {
     if (!dialog) return;
     chart?.destroy();
     chart = null;
+    const teamOptions = getTeamOptions(records);
+    if (filters.queue === "team") {
+      if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
+        filters.teamKey = teamOptions[0]?.key || "";
+      }
+    } else {
+      filters.teamKey = "";
+    }
     const chartData = getChartData(records, filters);
     const shell = dialog.querySelector<HTMLElement>("#bgh-graph-shell");
     if (!shell) return;
     const title = shell.querySelector<HTMLElement>("#bgh-graph-title");
     const toolbar = shell.querySelector<HTMLElement>(".bgh-graph-toolbar");
     const canvasHost = shell.querySelector<HTMLElement>(".bgh-graph-chart");
-    if (title) title.textContent = formatMetricLabel(filters.metric, filters.candleMode);
+    if (title) {
+      const label = formatMetricLabel(filters.metric, filters.candleMode);
+      title.textContent = filters.queue === "team" ? `Team ${label}` : label;
+    }
     if (!toolbar || !canvasHost) return;
+    const groups = FILTERS.filter(
+      (group) => !(filters.queue === "team" && group.key === "modeFilter"),
+    );
+    const teamSelect =
+      filters.queue === "team"
+        ? `<div class="bgh-graph-group bgh-graph-team"><span>Team</span>
+            <select id="bgh-team-select" class="bgh-graph-select" ${teamOptions.length ? "" : "disabled"}>
+              ${
+                teamOptions.length
+                  ? teamOptions
+                      .map(
+                        (team) =>
+                          `<option value="${escapeHtml(team.key)}" ${team.key === filters.teamKey ? "selected" : ""}>${escapeHtml(team.label)} (${team.count})</option>`,
+                      )
+                      .join("")
+                  : `<option>No team data yet</option>`
+              }
+            </select>
+          </div>`
+        : "";
     toolbar.innerHTML =
-      FILTERS.map((group) =>
-        filterGroup(
-          group.key,
-          group.values,
-          String(filters[group.key as keyof GraphFilters] ?? ""),
-        ),
-      ).join("") +
+      groups
+        .map((group) =>
+          filterGroup(
+            group.key,
+            group.values,
+            String(filters[group.key as keyof GraphFilters] ?? ""),
+          ),
+        )
+        .join("") +
+      teamSelect +
       `<div class="bgh-graph-group"><button class="bgh-graph-filter ${filters.showTrend ? "bgh-active" : ""}" type="button" data-trend="1">Trend</button></div>`;
+    toolbar
+      .querySelector<HTMLSelectElement>("#bgh-team-select")
+      ?.addEventListener("change", (event) => {
+        filters.teamKey = (event.currentTarget as HTMLSelectElement).value;
+        render();
+      });
     toolbar.querySelectorAll<HTMLButtonElement>(".bgh-graph-filter").forEach((button) => {
       button.addEventListener("click", () => {
         if (button.dataset.trend) {
@@ -168,6 +227,10 @@ export function createGraphView(): GraphView {
         const key = button.dataset.filter as keyof GraphFilters | undefined;
         const value = button.dataset.value;
         if (!key || value === undefined) return;
+        if (key === "queue") {
+          filters.queue = value as GraphQueue;
+          filters.teamKey = "";
+        }
         if (key === "metric") filters.metric = value as GraphMetric;
         if (key === "typeFilter") filters.typeFilter = value as GraphType;
         if (key === "modeFilter") filters.modeFilter = value as GraphMode;
@@ -179,6 +242,14 @@ export function createGraphView(): GraphView {
         render();
       });
     });
+
+    const note = shell.querySelector<HTMLElement>(".bgh-graph-note");
+    if (note) {
+      note.textContent =
+        filters.queue === "team"
+          ? "Team rating is separate from solo rating. Select one team composition at a time."
+          : "Solo ranked duels only. Team duels use the Team queue.";
+    }
 
     canvasHost.replaceChildren();
     if (!chartData.length) {
@@ -330,7 +401,11 @@ export function createGraphView(): GraphView {
             afterLabel: (context: any) => {
               if (filters.candleMode !== "none") return "";
               const point = chartData[context.dataIndex];
-              return point ? [`Opponent: ${point.opponent}`, `Mode: ${point.mode}`] : [];
+              if (!point) return [];
+              return [
+                `${point.teamLabel ? "Team" : "Opponent"}: ${point.teamLabel || point.opponent}`,
+                `Mode: ${point.mode}`,
+              ];
             },
           },
         },
@@ -382,7 +457,11 @@ export function createGraphView(): GraphView {
   return {
     open(nextRecords, nextFilters) {
       records = nextRecords;
-      filters = { ...nextFilters };
+      filters = {
+        ...nextFilters,
+        queue: nextFilters.queue || "solo",
+        teamKey: nextFilters.teamKey || "",
+      };
       if (filters.metric === "gameCount" && filters.candleMode === "none") {
         filters.candleMode = "daily";
       }

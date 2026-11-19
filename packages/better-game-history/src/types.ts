@@ -3,6 +3,7 @@ export type GraphTimeframe = "24h" | "7d" | "30d" | "All";
 export type GraphType = "Ranked" | "Unranked" | "All";
 export type GraphMode = "NMPZ" | "NM" | "Moving" | "All";
 export type CandleMode = "none" | "hourly" | "daily" | "monthly";
+export type GraphQueue = "solo" | "team";
 
 export type HydrationState = "pending" | "ok" | "unavailable" | "error";
 
@@ -23,6 +24,11 @@ export interface GameRecord {
   isTeamDuel: boolean;
   opponent?: string;
   opponentId?: string;
+  teamKey?: string;
+  teamPlayerIds?: string[];
+  teamPlayerNicks?: string[];
+  teammateIds?: string[];
+  teammateNicks?: string[];
   win?: boolean;
   ratingBefore?: number;
   ratingAfter?: number;
@@ -39,6 +45,11 @@ export interface GameRecord {
 export interface GameDetails {
   opponent?: string;
   opponentId?: string;
+  teamKey?: string;
+  teamPlayerIds?: string[];
+  teamPlayerNicks?: string[];
+  teammateIds?: string[];
+  teammateNicks?: string[];
   win?: boolean;
   modeKey?: string;
   mode?: string;
@@ -63,6 +74,8 @@ export interface GraphFilters {
   metric: GraphMetric;
   typeFilter: GraphType;
   modeFilter: GraphMode;
+  queue: GraphQueue;
+  teamKey: string;
   showTrend: boolean;
   candleMode: CandleMode;
 }
@@ -78,6 +91,8 @@ export interface GraphPoint {
   mode: string;
   gameId: string;
   isTeamDuel: boolean;
+  teamKey?: string;
+  teamLabel?: string;
 }
 
 export interface CandleGroup {

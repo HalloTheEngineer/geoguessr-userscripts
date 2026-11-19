@@ -71,7 +71,7 @@
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#geogamble" target="_blank" rel="noopener"><strong>GeoGamble</strong><span>Gambles random country points and adds per-round location cases.</span></a></li>
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#geosurfer" target="_blank" rel="noopener"><strong>GeoSurfer</strong><span>Adds an optional lightweight video overlay to the in-game stats panel.</span></a></li>
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#match-notifier" target="_blank" rel="noopener"><strong>Match Notifier</strong><span>Plays configurable sounds for duel starts and new rounds.</span></a></li>
-          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#better-game-history" target="_blank" rel="noopener"><strong>Better Game History</strong><span>Keeps a reliable, account-scoped duel history with rating and performance graphs.</span></a></li>
+          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#better-game-history" target="_blank" rel="noopener"><strong>Better Game History</strong><span>Keeps ranked solo and team history with selectable team rating graphs.</span></a></li>
       </ul>
       <div class="ggm-actions">
         <a class="ggm-page" href="${PAGE}" target="_blank" rel="noopener">Open installation page</a>

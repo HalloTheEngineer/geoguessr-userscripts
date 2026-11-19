@@ -79,7 +79,7 @@ Scripts must not patch `fetch`, `WebSocket`, or DOM observers directly when a ki
 
 - `packages/gg-kit/tests` covers config, settings, selectors, HTTP, duel encoding, and page helpers.
 - `packages/geogamble/tests` covers the pure country/case engine and the built bundle contract.
-- `packages/better-game-history/tests` covers history merging, hydration states, feed pagination, and graph data.
+- `packages/better-game-history/tests` covers history merging, ranked solo/team feed classification, team composition hydration, feed pagination, and graph data.
 - `tests/artifacts.test.mjs` validates metadata, version, imports, and size budgets for every artifact.
 - `npm run lint` rejects hardcoded hashed classes.
 - `npm run site:build` compares the public GeoGuessr build ID with the last checked value.
