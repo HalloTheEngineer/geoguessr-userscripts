@@ -17,44 +17,39 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function monogram(name) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
-}
-
-function card(config, repo, artifactVersion) {
+function row(config, repo, artifactVersion, index, previews) {
   const site = config.site || {};
   const title = site.displayName || config.name;
   const filename = path.basename(config.outfile);
-  const sourceUrl = `${repo.repoUrl}/tree/main/packages/${config.name}`;
+  const repoUrl = repo.repoUrl || `https://github.com/${repo.owner}/${repo.repo}`;
+  const sourceUrl = `${repoUrl}/tree/main/packages/${config.name}`;
   const features = (site.features || [])
     .map((feature) => `<li>${escapeHtml(feature)}</li>`)
     .join("");
-  const poster = site.poster
-    ? `<img class="poster" src="${escapeHtml(site.poster)}" alt="" loading="lazy" decoding="async" />`
-    : "";
-  return `
-    <article class="card${site.poster ? " cardPoster" : ""}" id="${escapeHtml(site.anchor || config.name)}" style="--accent: ${escapeHtml(site.accent || "#7952e9")}">
-      <div class="cardHeader">
-        <span class="monogram">${escapeHtml(monogram(title))}</span>
-        <div>
-          <h3>${escapeHtml(title)}</h3>
-          <p class="cardSummary">${escapeHtml(site.summary || config.packageJson.description || "")}</p>
-        </div>
+  const gallery = previews.length
+    ? `<div class="previewGrid">${previews
+        .map(
+          (preview) =>
+            `<button class="previewThumb" type="button" data-full="${escapeHtml(preview.src)}" data-alt="${escapeHtml(preview.alt || title)}"><img src="${escapeHtml(preview.src)}" alt="${escapeHtml(preview.alt || title)}" loading="lazy" decoding="async" /></button>`,
+        )
+        .join("")}</div>`
+    : `<div class="previewEmpty">Preview coming soon</div>`;
+  const legacyAnchors = (site.legacyAnchors || [])
+    .map((anchor) => `<span id="${escapeHtml(anchor)}" class="legacyAnchor" hidden></span>`)
+    .join("");
+  return `${legacyAnchors}
+    <article class="scriptRow" id="${escapeHtml(site.anchor || config.name)}" style="--accent: ${escapeHtml(site.accent || "#5b3df5")}">
+      <div class="scriptIndex">${String(index + 1).padStart(2, "0")}</div>
+      <div class="scriptInfo">
+        <h3>${escapeHtml(title)}</h3>
+        <p class="scriptSummary">${escapeHtml(site.summary || config.packageJson.description || "")}</p>
+        <ul class="scriptTags">${features}</ul>
+        <div class="scriptMeta">v${escapeHtml(artifactVersion || config.packageJson.version)}</div>
       </div>
-      ${poster}
-      <ul class="features">${features}</ul>
-      <div class="cardFooter">
-        <span class="version">v${escapeHtml(artifactVersion || config.packageJson.version)}</span>
-        <div class="cardActions">
-          <a class="sourceLink" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Source</a>
-          <a class="installLink" href="${escapeHtml(filename)}">Install</a>
-        </div>
+      <div class="scriptPreview">${gallery}</div>
+      <div class="scriptActions">
+        <a class="button buttonPrimary" href="${escapeHtml(filename)}">Install</a>
+        <a class="sourceLink" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Source</a>
       </div>
     </article>`;
 }
@@ -70,9 +65,36 @@ export async function buildSite() {
     .filter((config) => config.site)
     .sort((left, right) => (left.site.order || 0) - (right.site.order || 0));
   const artifactVersion = process.env.ARTIFACT_VERSION || "";
-  const cards = visible.map((config) => card(config, repo, artifactVersion)).join("\n");
+  const resolvedPreviews = new Map();
+  for (const config of visible) {
+    if (config.site?.previews) {
+      resolvedPreviews.set(config.name, config.site.previews);
+      continue;
+    }
+    const dir = path.join(ROOT, "assets", "previews", config.name);
+    let files = [];
+    try {
+      files = (await fs.readdir(dir))
+        .filter((file) => /\.(webp|png|jpe?g|avif)$/i.test(file))
+        .sort();
+    } catch {
+      // No preview directory.
+    }
+    resolvedPreviews.set(
+      config.name,
+      files.map((file, index) => ({
+        src: `previews/${config.name}/${file}`,
+        alt: `${config.site?.displayName || config.name} preview ${index + 1}`,
+      })),
+    );
+  }
+  const rows = visible
+    .map((config, index) =>
+      row(config, repo, artifactVersion, index, resolvedPreviews.get(config.name) || []),
+    )
+    .join("\n");
   const html = template
-    .replaceAll("{{CARDS}}", cards)
+    .replaceAll("{{ROWS}}", rows)
     .replaceAll(
       "{{REPO_URL}}",
       escapeHtml(repo.repoUrl || `https://github.com/${repo.owner}/${repo.repo}`),
@@ -81,19 +103,23 @@ export async function buildSite() {
   await fs.mkdir(OUT, { recursive: true });
   await fs.writeFile(path.join(OUT, "index.html"), html);
   await fs.writeFile(path.join(OUT, "styles.css"), styles);
+  await fs.copyFile(path.join(SITE, "app.js"), path.join(OUT, "app.js"));
   for (const config of visible) {
-    if (!config.site?.poster) continue;
-    const source = path.join(ROOT, "assets", "geosurfer", "poster.webp");
-    try {
-      await fs.copyFile(source, path.join(OUT, config.site.poster));
-    } catch {
-      // Poster is optional.
+    for (const preview of resolvedPreviews.get(config.name) || []) {
+      const previewSource = path.join(ROOT, "assets", preview.src);
+      const previewTarget = path.join(OUT, preview.src);
+      await fs.mkdir(path.dirname(previewTarget), { recursive: true });
+      try {
+        await fs.copyFile(previewSource, previewTarget);
+      } catch {
+        // Preview is optional.
+      }
     }
   }
   console.log(
     `Built ${path.relative(ROOT, path.join(OUT, "index.html"))} (${visible.length} scripts)`,
   );
-  return { html, cards };
+  return { html, rows };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

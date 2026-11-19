@@ -6,7 +6,7 @@ export type GraphType = "Ranked" | "Unranked" | "All";
 export type GraphMode = "NMPZ" | "NM" | "Moving" | "All";
 export type CandleMode = "none" | "hourly" | "daily" | "monthly";
 
-export interface PersistentGameSummaryConfig {
+export interface BetterGameHistoryConfig {
   enabled: boolean;
   showDrawer: boolean;
   historyLimit: number;
@@ -19,8 +19,8 @@ export interface PersistentGameSummaryConfig {
   defaultCandleMode: CandleMode;
 }
 
-export const persistentGameSummaryConfig = defineConfig<PersistentGameSummaryConfig>({
-  key: "gg.persistent-game-summary.config",
+export const betterGameHistoryConfig = defineConfig<BetterGameHistoryConfig>({
+  key: "gg.better-game-history.config",
   version: 1,
   write: "diff",
   fields: {
@@ -35,6 +35,7 @@ export const persistentGameSummaryConfig = defineConfig<PersistentGameSummaryCon
       type: "boolean",
       default: true,
       label: "Show the history drawer",
+      hint: "Press Alt+G to open the graph while the drawer is hidden.",
       section: "general",
       order: 1,
     },

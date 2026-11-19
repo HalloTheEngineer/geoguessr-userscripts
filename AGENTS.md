@@ -20,7 +20,7 @@
 - Never use a full hashed CSS module class. Use `[class*="module_local__"]` or a `gg-kit` selector.
 - Prefer `data-qa` and semantic selectors over class names.
 - Keep shared GeoGuessr behavior in `packages/gg-kit`; keep script-specific behavior in its package.
-- New UI must use a `gg-`, `ggk-`, `pers-`, or `ggb-` namespace.
+- New UI must use a `gg-`, `ggk-`, `bgh-`, or `ggb-` namespace.
 - Settings are schema/config driven; register a section with `gg-kit` instead of building a tab/panel.
 - Do not add runtime `@require` dependencies. Bundle code into the userscript.
 - Do not commit `.har`, `storageState.json`, cookies, or tokens.

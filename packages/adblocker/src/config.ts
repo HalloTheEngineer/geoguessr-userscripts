@@ -25,8 +25,8 @@ export const adblockerConfig = defineConfig<AdblockerConfig>({
     blockAdsAndAnalytics: {
       type: "boolean",
       default: true,
-      label: "Block ads and analytics",
-      hint: "Controls DOM cleanup. Manager-level @webRequest rules remain active while installed.",
+      label: "Clean ad scripts and iframes",
+      hint: "Controls DOM cleanup only. Best-effort @webRequest rules depend on userscript-manager support.",
       section: "ads",
       order: 10,
     },

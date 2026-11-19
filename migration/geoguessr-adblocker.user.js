@@ -13,9 +13,7 @@
 // @noframes
 // ==/UserScript==
 
-(function () {
-  "use strict";
-
+(() => {
   const PAGE = "https://hallotheengineer.github.io/geoguessr-userscripts";
   const SESSION_KEY = "gg-toolkit-migration-notice-dismissed";
 
@@ -69,11 +67,11 @@
         <p>This gist script is no longer maintained. Install the current versions from the new page.</p>
       </div>
       <ul class="ggm-list">
-          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#adblocker" target="_blank" rel="noopener"><strong>AdBlocker</strong><span>Blocks known ad and analytics requests, then removes selected UI clutter.</span></a></li>
+          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#adblocker" target="_blank" rel="noopener"><strong>AdBlocker</strong><span>Best-effort ad and analytics blocking plus targeted UI cleanup.</span></a></li>
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#geogamble" target="_blank" rel="noopener"><strong>GeoGamble</strong><span>Gambles random country points and adds per-round location cases.</span></a></li>
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#geosurfer" target="_blank" rel="noopener"><strong>GeoSurfer</strong><span>Adds an optional lightweight video overlay to the in-game stats panel.</span></a></li>
           <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#match-notifier" target="_blank" rel="noopener"><strong>Match Notifier</strong><span>Plays configurable sounds for duel starts and new rounds.</span></a></li>
-          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#persistent-game-summary" target="_blank" rel="noopener"><strong>Persistent Game Summary</strong><span>Tracks duel history and renders rating, score, and performance graphs.</span></a></li>
+          <li><a href="https://hallotheengineer.github.io/geoguessr-userscripts/#better-game-history" target="_blank" rel="noopener"><strong>Better Game History</strong><span>Keeps a reliable, account-scoped duel history with rating and performance graphs.</span></a></li>
       </ul>
       <div class="ggm-actions">
         <a class="ggm-page" href="${PAGE}" target="_blank" rel="noopener">Open installation page</a>

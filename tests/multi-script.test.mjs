@@ -7,7 +7,7 @@ const bundles = [
   ["match-notifier", "geoguessr-match-notifier.user.js"],
   ["adblocker", "geoguessr-adblocker.user.js"],
   ["geosurfer", "geoguessr-geosurfer.user.js"],
-  ["persistent-game-summary", "geoguessr-persistent-game-summary.user.js"],
+  ["better-game-history", "geoguessr-better-game-history.user.js"],
   ["geogamble", "geoguessr-geogamble.user.js"],
 ];
 
@@ -49,10 +49,10 @@ test("multiple userscripts share one runtime host and settings tab", async () =>
     assert.ok(host);
     assert.deepEqual([...host.registrations.keys()].sort(), [
       "adblocker",
+      "better-game-history",
       "geogamble",
       "geosurfer",
       "match-notifier",
-      "persistent-game-summary",
     ]);
     assert.equal(dom.document.querySelectorAll("#ggk-userscripts-tab").length, 1);
     assert.equal(dom.document.querySelectorAll(".ggk-subTab").length, 5);

@@ -50,6 +50,46 @@ test("page helpers identify routes", () => {
   assert.equal(kit.pageKind("/game/abc"), "game");
   assert.equal(kit.gameId("/game/abc"), "abc");
   assert.equal(kit.isDuelPage("/team-duels/abc"), true);
+  assert.equal(kit.duelSummaryPath("abc"), "/duels/abc/summary");
+  assert.equal(kit.duelSummaryPath("abc", true), "/team-duels/abc/summary");
+});
+
+test("currentUserId ignores the viewed profile user", () => {
+  document.head.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+    props: {
+      accountProps: { account: { user: { userId: "account-user" } } },
+      pageProps: { user: { userId: "profile-user" } },
+    },
+  })}</script>`;
+  assert.equal(kit.currentUserId(), "account-user");
+
+  document.head.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+    props: { pageProps: { user: { userId: "profile-user" } } },
+  })}</script>`;
+  assert.equal(kit.currentUserId(), null);
+});
+
+test("waitForCurrentUserId resolves once account data appears", async () => {
+  document.head.innerHTML = "";
+  const pending = kit.waitForCurrentUserId({ timeoutMs: 500, intervalMs: 5 });
+  setTimeout(() => {
+    document.head.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+      props: { accountProps: { account: { user: { userId: "late-user" } } } },
+    })}</script>`;
+  }, 15);
+  assert.equal(await pending, "late-user");
+});
+
+test("waitForCurrentUserId can be aborted", async () => {
+  document.head.innerHTML = "";
+  const controller = new AbortController();
+  const pending = kit.waitForCurrentUserId({
+    timeoutMs: 500,
+    intervalMs: 5,
+    signal: controller.signal,
+  });
+  controller.abort();
+  assert.equal(await pending, null);
 });
 
 test("siteBuild prefers __NEXT_DATA__ and ignores static chunk folders", () => {

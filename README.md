@@ -6,11 +6,11 @@ A small monorepo for GeoGuessr userscripts. Each script is built from `src/` int
 
 | Package | Artifact | Description |
 | --- | --- | --- |
-| `packages/adblocker` | `dist/geoguessr-adblocker.user.js` | Ad and analytics blocking plus UI cleanup |
+| `packages/adblocker` | `dist/geoguessr-adblocker.user.js` | Best-effort ad blocking plus targeted UI cleanup |
 | `packages/geogamble` | `dist/geoguessr-geogamble.user.js` | Country gambling and per-round location cases |
 | `packages/match-notifier` | `dist/geoguessr-match-notifier.user.js` | Match and new-round alert sounds |
 | `packages/geosurfer` | `dist/geoguessr-geosurfer.user.js` | Optional lazy video overlay for the in-game stats panel |
-| `packages/persistent-game-summary` | `dist/geoguessr-persistent-game-summary.user.js` | Duel history drawer and rating graphs |
+| `packages/better-game-history` | `dist/geoguessr-better-game-history.user.js` | Account-scoped duel history drawer and rating graphs |
 
 Install a generated artifact in Tampermonkey, Violentmonkey, or a compatible userscript manager. Artifacts are published to GitHub Pages:
 
@@ -20,7 +20,7 @@ Install a generated artifact in Tampermonkey, Violentmonkey, or a compatible use
 | GeoGamble | https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-geogamble.user.js |
 | GeoSurfer | https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-geosurfer.user.js |
 | Match Notifier | https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-match-notifier.user.js |
-| Persistent Game Summary | https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-persistent-game-summary.user.js |
+| Better Game History | https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-better-game-history.user.js |
 
 ## Development
 
@@ -40,10 +40,11 @@ The dev server lists installable scripts at `http://127.0.0.1:8787/`. It rebuild
 Tests:
 
 ```bash
-npm run test:kit          # gg-kit unit tests
-npm run test:geogamble    # GeoGamble core and bundle contract tests
-npm run test:artifacts    # every dist artifact metadata and size budget
-npm test                  # all of the above
+npm run test:kit                 # gg-kit unit tests
+npm run test:geogamble           # GeoGamble core and bundle contract tests
+npm run test:better-game-history # history data, hydration, feed, and graph tests
+npm run test:artifacts           # artifact metadata, site, and migration tests
+npm test                         # all of the above
 ```
 
 ## Layout
@@ -67,7 +68,7 @@ GitHub Pages serves a landing page at:
 https://hallotheengineer.github.io/geoguessr-userscripts/
 ```
 
-It lists every script, features, install links, installation steps, and the migration status. Generate it locally with:
+It lists every script in a rectangular row with feature tags, install links, installation steps, migration status, and enlargable previews. Generate it locally with:
 
 ```bash
 npm run build:site

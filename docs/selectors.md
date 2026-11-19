@@ -20,7 +20,7 @@ GeoGuessr uses CSS modules whose class names end in a build-specific hash, for e
 - Never write `game-menu_settingsContainer__NeJu2` or another full hash.
 - `npm run lint` fails on hashed selectors.
 - Prefer `query("capability")` from `gg-kit` over ad-hoc `document.querySelector` for shared UI.
-- Injected UI uses namespaced classes and IDs: `gg-`, `ggk-`, `pers-`, or `ggb-`.
+- Injected UI uses namespaced classes and IDs: `gg-`, `ggk-`, `bgh-`, or `ggb-`.
 - Add candidate selectors as a list (`any: [...]`), not a single brittle selector.
 - Keep the scope narrow: search inside the settings dialog or guess map, not the whole document.
 

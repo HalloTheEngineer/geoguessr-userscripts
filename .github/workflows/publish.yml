@@ -57,6 +57,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view userscripts-assets >/dev/null 2>&1 || \
+          if ! gh release view userscripts-assets >/dev/null 2>&1; then
             gh release create userscripts-assets --title "Userscript assets" --notes "Media assets for GeoGuessr Toolkit userscripts."
+          fi
+          tmpdir="$(mktemp -d)"
+          if gh release download userscripts-assets -p brainrot.mp4 -D "$tmpdir" >/dev/null 2>&1; then
+            if cmp -s "$tmpdir/brainrot.mp4" assets/geosurfer/brainrot.mp4; then
+              echo "brainrot.mp4 is unchanged; skipping asset upload."
+              exit 0
+            fi
+          fi
           gh release upload userscripts-assets assets/geosurfer/brainrot.mp4 --clobber

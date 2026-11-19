@@ -47,10 +47,10 @@ test("all workspaces are represented by userscript packages", () => {
   const workspaceNames = configs.map((config) => config.name).sort();
   assert.deepEqual(workspaceNames, [
     "adblocker",
+    "better-game-history",
     "geogamble",
     "geosurfer",
     "match-notifier",
-    "persistent-game-summary",
   ]);
 });
 

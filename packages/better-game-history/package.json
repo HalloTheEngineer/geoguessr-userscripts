@@ -1,0 +1,14 @@
+{
+  "name": "@geoguessr-userscripts/better-game-history",
+  "version": "2026.11.20",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../tooling/build-userscript.mjs better-game-history",
+    "build:check": "node ../../tooling/build-userscript.mjs better-game-history --check"
+  },
+  "dependencies": {
+    "chart.js": "^4.6.1",
+    "gg-kit": "*"
+  }
+}

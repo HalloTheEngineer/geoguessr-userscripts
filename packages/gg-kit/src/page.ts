@@ -60,14 +60,58 @@ export function siteBuild(): string | null {
 
 export function currentUserId(): string | null {
   const data = nextData();
-  const userId =
-    data?.props?.accountProps?.account?.user?.userId ||
-    data?.props?.pageProps?.user?.userId ||
-    null;
+  const userId = data?.props?.accountProps?.account?.user?.userId || null;
   if (userId) return userId;
   const win = pageWindow() as unknown as { __NEXT_DATA__?: NextData };
   const direct = win.__NEXT_DATA__?.props?.accountProps?.account?.user?.userId;
   return direct || null;
+}
+
+export interface WaitForCurrentUserIdOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+  signal?: AbortSignal;
+}
+
+export function waitForCurrentUserId(
+  options: WaitForCurrentUserIdOptions = {},
+): Promise<string | null> {
+  const existing = currentUserId();
+  if (existing) return Promise.resolve(existing);
+  if (!hasDom()) return Promise.resolve(null);
+
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const intervalMs = options.intervalMs ?? 200;
+  return new Promise((resolve) => {
+    if (options.signal?.aborted) {
+      resolve(null);
+      return;
+    }
+    const deadline = Date.now() + timeoutMs;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (value: string | null) => {
+      if (interval) clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", onAbort);
+      resolve(value);
+    };
+    const onAbort = () => finish(null);
+    const check = () => {
+      const value = currentUserId();
+      if (value) {
+        finish(value);
+        return;
+      }
+      if (Date.now() >= deadline) finish(null);
+    };
+
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    interval = setInterval(check, intervalMs);
+    timeout = setTimeout(() => finish(currentUserId()), timeoutMs);
+    check();
+  });
 }
 
 export type PageKind =
@@ -104,4 +148,8 @@ export function isSummaryPage(pathname = location.pathname): boolean {
 
 export function isDuelPage(pathname = location.pathname): boolean {
   return /^\/(?:duels|team-duels)\//.test(pathname) && !pathname.endsWith("/summary");
+}
+
+export function duelSummaryPath(gameId: string, isTeamDuel = false): string {
+  return `/${isTeamDuel ? "team-duels" : "duels"}/${encodeURIComponent(gameId)}/summary`;
 }

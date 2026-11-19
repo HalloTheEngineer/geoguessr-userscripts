@@ -13,7 +13,7 @@ Each package has its own semantic version in `package.json`. The build injects i
 Set the repository Pages source to **GitHub Actions** before the first deployment. Publishing is managed by GitHub Actions:
 
 - `verify.yml` runs `npm run verify`.
-- `publish.yml` runs on pushes to `main`, builds artifacts with a `YYYY.MM.DD.<run>` version, deploys them to GitHub Pages, uploads `assets/geosurfer/brainrot.mp4` to the `userscripts-assets` release. Legacy gists are updated manually with permanent migration notices after Pages is verified.
+- `publish.yml` runs on pushes to `main`, builds artifacts with a `YYYY.MM.DD.<run>` version, deploys them to GitHub Pages, uploads `assets/geosurfer/brainrot.mp4` to the `userscripts-assets` release only when its contents changed. Legacy gists are updated manually with permanent migration notices after Pages is verified.
 
 Local checks:
 
@@ -35,11 +35,11 @@ This refactor intentionally drops legacy settings/history. The new config/data k
 
 - `gg.adblocker.config`
 - `gg.match-notifier.config`
-- `gg.persistent-game-summary.config`
-- `gg.persistent-game-summary.history`
+- `gg.better-game-history.config`
+- `gg.better-game-history.history`
 - `gg.geogamble.config`
 
-Old keys are removed on first load. Include this warning in the next release notes. Dev builds use the next patch version with a `-dev` prerelease; CI publishes date/run-versioned artifacts.
+The old Persistent Game Summary keys are removed on first load. Include this warning in the next release notes. Dev builds use the next patch version with a `-dev` prerelease; CI publishes date/run-versioned artifacts.
 
 ## Pre-release checklist
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GeoGuessr Toolkit: AdBlocker
 // @namespace    https://github.com/HalloTheEngineer/geoguessr-userscripts
-// @version      2026.11.19
+// @version      2026.11.20
 // @description  Blocks known ad/analytics requests and cleans up selected GeoGuessr UI.
 // @author       PixlPainter
 // @license      MIT
@@ -1028,6 +1028,7 @@
     }
     const cleanups = [];
     const routeCleanups = [];
+    const pageHideCallbacks = [];
     let settings = null;
     let stopped = false;
     const context = {
@@ -1045,6 +1046,9 @@
           callback(new URL(location.href));
         } catch {
         }
+      },
+      onPageHide(callback) {
+        pageHideCallbacks.push(callback);
       }
     };
     if (options.settings && options.config) {
@@ -1066,6 +1070,13 @@
       throw error;
     }
     const onPageHide = () => {
+      for (const callback of pageHideCallbacks) {
+        try {
+          callback();
+        } catch (error) {
+          console.warn(`[${options.name}] pagehide callback failed`, error);
+        }
+      }
       options.config?.flush();
     };
     pageWindow().addEventListener("pagehide", onPageHide);
@@ -1087,6 +1098,7 @@
             console.warn(`[${options.name}] route cleanup failed`, error);
           }
         }
+        pageHideCallbacks.length = 0;
         for (const cleanup of cleanups.splice(0).reverse()) {
           try {
             cleanup();
@@ -1494,8 +1506,8 @@
       blockAdsAndAnalytics: {
         type: "boolean",
         default: true,
-        label: "Block ads and analytics",
-        hint: "Controls DOM cleanup. Manager-level @webRequest rules remain active while installed.",
+        label: "Clean ad scripts and iframes",
+        hint: "Controls DOM cleanup only. Best-effort @webRequest rules depend on userscript-manager support.",
         section: "ads",
         order: 10
       },
@@ -1539,14 +1551,19 @@
 
   // src/rules.ts
   var DIRECT_BLOCK_CONFIG = [
+    { selector: '[class*="team-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
+    { selector: '[class*="ranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
+    { selector: '[class*="unranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="team-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="ranked-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="unranked-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="styles_friendChatButton__"]', category: "inGame" },
-    { selector: '[class*="styles_controlGroup__"]', category: "inGame" },
     { selector: '[class*="live-players-count_container__"]', category: "inGame" },
+    { selector: '[class*="home_footer__"]', category: "home", url_paths: ["/"] },
+    { selector: '[class*="new-losp-footer_root__"]', category: "home", url_paths: ["/"] },
     { selector: '[class*="footer_footer__"]', category: "home", url_paths: ["/"] },
     { selector: '[class*="footer_root__"]', category: "multiplayer", url_paths: ["/multiplayer"] },
+    { selector: '[class*="home_editButtonWrapper__"]', category: "home" },
     { selector: '[class*="pro-user-start-page_editButtonWrapper__"]', category: "home" },
     { selector: 'iframe[name="__tcfapiLocator"]', category: "ads" },
     { selector: 'iframe[name="__uspapiLocator"]', category: "ads" },
@@ -1558,8 +1575,10 @@
     { selector: "#adconsent-usp-banner-btn", category: "ads" }
   ];
   var CSS_HIDING_SELECTORS = [
-    { selector: '[class*="pro-user-start-page_left__"]', category: "home" },
-    { selector: '.gmnoprint:not([class*="sv-links-control"])', category: "inGame" }
+    {
+      selector: '[class*="home_left__"], [class*="pro-user-start-page_left__"]',
+      category: "home"
+    }
   ];
   var ANCESTOR_BLOCK_CONFIG = [
     {
@@ -1583,7 +1602,7 @@
   ];
   var HTML_INSERTS = [
     {
-      selector: '[class*="pro-user-start-page_center__"]',
+      selector: '[class*="home_center__"], [class*="pro-user-start-page_center__"]',
       url_paths: ["/"],
       category: "home",
       insertId: "ggb-insert-links",
@@ -1611,31 +1630,69 @@
         return adblockerConfig.get("cleanupMultiplayer");
     }
   }
+  var LOCALE_PREFIXES = /* @__PURE__ */ new Set([
+    "cs",
+    "da",
+    "de",
+    "en",
+    "es",
+    "fi",
+    "fr",
+    "hu",
+    "it",
+    "ja",
+    "ko",
+    "nl",
+    "no",
+    "pl",
+    "pt",
+    "ro",
+    "ru",
+    "sv",
+    "tr",
+    "uk",
+    "zh"
+  ]);
+  function normalizedPath() {
+    const segments = location.pathname.split("/").filter(Boolean);
+    if (segments.length > 1 && LOCALE_PREFIXES.has(segments[0].toLowerCase())) {
+      return `/${segments.slice(1).join("/")}`;
+    }
+    return location.pathname || "/";
+  }
   function pathMatches(urlPaths) {
     if (!urlPaths?.length) return true;
-    const path = location.pathname;
+    const path = normalizedPath();
     return urlPaths.some((value) => path === value || path.startsWith(`${value}/`));
   }
   function log(...args) {
     if (adblockerConfig.get("debug")) console.log("[adblocker]", ...args);
   }
   function isBlockedUrl(url) {
-    return !!url && network_rules_default.blockedDomains.some((domain) => url.includes(domain));
+    if (!url) return false;
+    try {
+      const hostname = new URL(url, location.href).hostname.toLowerCase();
+      return network_rules_default.blockedDomains.some(
+        (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+      );
+    } catch {
+      return false;
+    }
   }
   function syncCss() {
     const selectors = CSS_HIDING_SELECTORS.filter(
       (rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths)
     ).map((rule) => rule.selector);
-    const css = selectors.length ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+    const css = `${selectors.length ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }` : ""}
        #ggb-insert-links a { transition: transform .2s ease, filter .2s ease; }
        #ggb-insert-links a:hover { transform: scale(1.05); filter: brightness(1.1); }
-       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }` : "";
+       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }`;
     const existing = document.getElementById("geoguessr-adblocker-style");
     if (existing) existing.textContent = css;
     else injectStyle("geoguessr-adblocker-style", css);
   }
   function scanAndRemoveScripts(node) {
-    if (!node || !adblockerConfig.get("blockAdsAndAnalytics")) return;
+    if (!node || !categoryEnabled("ads")) return;
     const element = node;
     if ((element.tagName === "SCRIPT" || element.tagName === "IFRAME") && isBlockedUrl(element.getAttribute("src"))) {
       element.remove();
@@ -1689,7 +1746,10 @@
       const source = sources[0];
       const target = targets[0];
       if (!source.children.length) continue;
-      for (const child of [...source.children].reverse()) target.prepend(child);
+      for (const child of [...source.children]) {
+        if (rule.reverseOrder) target.prepend(child);
+        else target.append(child);
+      }
       source.remove();
       count++;
     }
@@ -1710,7 +1770,7 @@
   }
   startUserscript({
     name: "adblocker",
-    version: "2026.11.19",
+    version: "2026.11.20",
     config: adblockerConfig,
     topFrameOnly: false,
     settings: isTopFrame() ? {
@@ -1731,13 +1791,8 @@
       ]
     } : null,
     setup(context) {
-      const sync = () => {
-        blockElements();
-        syncCss();
-      };
-      const unsubscribe = adblockerConfig.subscribe(sync);
-      context.onCleanup(unsubscribe);
       const observer = new MutationObserver((mutations) => {
+        if (!adblockerConfig.get("enabled")) return;
         let changed = false;
         for (const mutation of mutations) {
           for (const node of mutation.addedNodes) {
@@ -1749,38 +1804,62 @@
         }
         if (changed) scheduleBlock();
       });
-      let started = false;
+      let observing = false;
       let retry = null;
-      const start = () => {
-        if (started) return;
+      const stopObserver = () => {
+        if (retry) {
+          clearTimeout(retry);
+          retry = null;
+        }
+        observer.disconnect();
+        observing = false;
+      };
+      const startObserver = () => {
+        if (observing || retry || !adblockerConfig.get("enabled")) return;
         const root = document.documentElement;
         if (!root) {
-          retry = setTimeout(start, 20);
+          retry = setTimeout(() => {
+            retry = null;
+            startObserver();
+          }, 20);
           return;
         }
-        started = true;
         observer.observe(root, { childList: true, subtree: true });
-        blockElements();
-        scanAndRemoveScripts(root);
-        context.onCleanup(() => observer.disconnect());
+        observing = true;
         context.log("initialized");
       };
-      start();
-      context.onCleanup(() => {
-        if (retry) clearTimeout(retry);
-      });
+      const sync = () => {
+        if (adblockerConfig.get("enabled")) {
+          startObserver();
+          blockElements();
+          scanAndRemoveScripts(document.documentElement);
+        } else {
+          stopObserver();
+          blockElements();
+        }
+      };
+      const unsubscribe = adblockerConfig.subscribe(sync);
+      context.onCleanup(unsubscribe);
+      const onReady = () => {
+        if (!adblockerConfig.get("enabled")) return;
+        blockElements();
+        scanAndRemoveScripts(document.body);
+      };
+      window.addEventListener("DOMContentLoaded", onReady, { once: true });
+      startObserver();
+      blockElements();
+      scanAndRemoveScripts(document.documentElement);
       context.onRoute(() => {
+        if (!adblockerConfig.get("enabled")) return;
         blockElements();
         scanAndRemoveScripts(document.documentElement);
       });
-      window.addEventListener(
-        "DOMContentLoaded",
-        () => {
-          blockElements();
-          scanAndRemoveScripts(document.body);
-        },
-        { once: true }
-      );
+      context.onCleanup(() => {
+        stopObserver();
+        window.removeEventListener("DOMContentLoaded", onReady);
+        document.getElementById("geoguessr-adblocker-style")?.remove();
+        document.getElementById("ggb-insert-links")?.remove();
+      });
     }
   });
 })();

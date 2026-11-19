@@ -12,9 +12,15 @@ await fs.rm(OUTPUT, { recursive: true, force: true });
 await fs.mkdir(OUTPUT, { recursive: true });
 for (const config of await listConfigs()) {
   const source = path.join(config.dir, config.outfile);
-  const target = path.join(OUTPUT, path.basename(config.outfile));
-  await fs.copyFile(source, target);
-  console.log(`Staged ${path.relative(ROOT, target)}`);
+  const filenames = [
+    path.basename(config.outfile),
+    ...(config.publish?.compatibilityFilenames || []),
+  ];
+  for (const filename of filenames) {
+    const target = path.join(OUTPUT, filename);
+    await fs.copyFile(source, target);
+    console.log(`Staged ${path.relative(ROOT, target)}`);
+  }
 }
 
 await buildSite();

@@ -26,9 +26,41 @@ function categoryEnabled(category: Category): boolean {
   }
 }
 
+const LOCALE_PREFIXES = new Set([
+  "cs",
+  "da",
+  "de",
+  "en",
+  "es",
+  "fi",
+  "fr",
+  "hu",
+  "it",
+  "ja",
+  "ko",
+  "nl",
+  "no",
+  "pl",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "tr",
+  "uk",
+  "zh",
+]);
+
+function normalizedPath(): string {
+  const segments = location.pathname.split("/").filter(Boolean);
+  if (segments.length > 1 && LOCALE_PREFIXES.has(segments[0].toLowerCase())) {
+    return `/${segments.slice(1).join("/")}`;
+  }
+  return location.pathname || "/";
+}
+
 function pathMatches(urlPaths?: string[]): boolean {
   if (!urlPaths?.length) return true;
-  const path = location.pathname;
+  const path = normalizedPath();
   return urlPaths.some((value) => path === value || path.startsWith(`${value}/`));
 }
 
@@ -37,26 +69,36 @@ function log(...args: unknown[]): void {
 }
 
 function isBlockedUrl(url: string | null): boolean {
-  return !!url && networkRules.blockedDomains.some((domain) => url.includes(domain));
+  if (!url) return false;
+  try {
+    const hostname = new URL(url, location.href).hostname.toLowerCase();
+    return networkRules.blockedDomains.some(
+      (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function syncCss(): void {
   const selectors = CSS_HIDING_SELECTORS.filter(
     (rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths),
   ).map((rule) => rule.selector);
-  const css = selectors.length
-    ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+  const css = `${
+    selectors.length
+      ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }`
+      : ""
+  }
        #ggb-insert-links a { transition: transform .2s ease, filter .2s ease; }
        #ggb-insert-links a:hover { transform: scale(1.05); filter: brightness(1.1); }
-       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }`
-    : "";
+       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }`;
   const existing = document.getElementById("geoguessr-adblocker-style");
   if (existing) existing.textContent = css;
   else injectStyle("geoguessr-adblocker-style", css);
 }
 
 function scanAndRemoveScripts(node: ParentNode | null): void {
-  if (!node || !adblockerConfig.get("blockAdsAndAnalytics")) return;
+  if (!node || !categoryEnabled("ads")) return;
   const element = node as Element;
   if (
     (element.tagName === "SCRIPT" || element.tagName === "IFRAME") &&
@@ -119,7 +161,10 @@ function blockElements(): void {
     const source = sources[0];
     const target = targets[0];
     if (!source.children.length) continue;
-    for (const child of [...source.children].reverse()) target.prepend(child);
+    for (const child of [...source.children]) {
+      if (rule.reverseOrder) target.prepend(child);
+      else target.append(child);
+    }
     source.remove();
     count++;
   }
@@ -165,14 +210,8 @@ startUserscript({
       }
     : null,
   setup(context) {
-    const sync = () => {
-      blockElements();
-      syncCss();
-    };
-    const unsubscribe = adblockerConfig.subscribe(sync);
-    context.onCleanup(unsubscribe);
-
     const observer = new MutationObserver((mutations) => {
+      if (!adblockerConfig.get("enabled")) return;
       let changed = false;
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
@@ -185,37 +224,65 @@ startUserscript({
       if (changed) scheduleBlock();
     });
 
-    let started = false;
+    let observing = false;
     let retry: ReturnType<typeof setTimeout> | null = null;
-    const start = () => {
-      if (started) return;
+    const stopObserver = () => {
+      if (retry) {
+        clearTimeout(retry);
+        retry = null;
+      }
+      observer.disconnect();
+      observing = false;
+    };
+    const startObserver = () => {
+      if (observing || retry || !adblockerConfig.get("enabled")) return;
       const root = document.documentElement;
       if (!root) {
-        retry = setTimeout(start, 20);
+        retry = setTimeout(() => {
+          retry = null;
+          startObserver();
+        }, 20);
         return;
       }
-      started = true;
       observer.observe(root, { childList: true, subtree: true });
-      blockElements();
-      scanAndRemoveScripts(root);
-      context.onCleanup(() => observer.disconnect());
+      observing = true;
       context.log("initialized");
     };
-    start();
-    context.onCleanup(() => {
-      if (retry) clearTimeout(retry);
-    });
+
+    const sync = () => {
+      if (adblockerConfig.get("enabled")) {
+        startObserver();
+        blockElements();
+        scanAndRemoveScripts(document.documentElement);
+      } else {
+        stopObserver();
+        blockElements();
+      }
+    };
+    const unsubscribe = adblockerConfig.subscribe(sync);
+    context.onCleanup(unsubscribe);
+
+    const onReady = () => {
+      if (!adblockerConfig.get("enabled")) return;
+      blockElements();
+      scanAndRemoveScripts(document.body);
+    };
+    window.addEventListener("DOMContentLoaded", onReady, { once: true });
+
+    startObserver();
+    blockElements();
+    scanAndRemoveScripts(document.documentElement);
+
     context.onRoute(() => {
+      if (!adblockerConfig.get("enabled")) return;
       blockElements();
       scanAndRemoveScripts(document.documentElement);
     });
-    window.addEventListener(
-      "DOMContentLoaded",
-      () => {
-        blockElements();
-        scanAndRemoveScripts(document.body);
-      },
-      { once: true },
-    );
+    context.onCleanup(() => {
+      stopObserver();
+      window.removeEventListener("DOMContentLoaded", onReady);
+      document.getElementById("geoguessr-adblocker-style")?.remove();
+      document.getElementById("ggb-insert-links")?.remove();
+    });
   },
 });

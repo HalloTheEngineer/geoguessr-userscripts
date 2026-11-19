@@ -4,7 +4,7 @@
 
 Hand-written code is TypeScript. Generated data files, the embedded alert sound, and fixture snapshots are treated as non-authored assets. Biome enforces formatting and lint rules; `npm run format:check` and `npm run lint` are part of `verify`.
 
-The two legacy runtime monoliths (`persistent-game-summary/src/main.ts` and `geogamble/src/main.ts`) and GeoGamble pure-core files still carry `// @ts-nocheck` while they are split into typed modules. Shared config/settings/storage/app modules are fully typechecked. Remove the remaining `@ts-nocheck` directives as those files are decomposed.
+The remaining legacy runtime monolith (`geogamble/src/main.ts`) and GeoGamble pure-core files still carry `// @ts-nocheck` while they are split into typed modules. Shared config/settings/storage/app modules are fully typechecked. Better Game History is fully typed across its data, hydration, feed, graph, and UI modules.
 
 ## Multi-script runtime
 
@@ -61,7 +61,7 @@ Scripts must not patch `fetch`, `WebSocket`, or DOM observers directly when a ki
 
 ## Page model
 
-`pageKind()` classifies routes as home, singleplayer, game, duel, team-duel, summary, profile, settings, or other. `gameId()` extracts the route ID. `siteBuild()` reads the Next.js build ID for diagnostics. `currentUserId()` reads `__NEXT_DATA__`.
+`pageKind()` classifies routes as home, singleplayer, game, duel, team-duel, summary, profile, settings, or other. `gameId()` extracts the route ID. `siteBuild()` reads the Next.js build ID for diagnostics. `currentUserId()` reads the signed-in account from `__NEXT_DATA__` only; `waitForCurrentUserId()` handles hydration timing without treating a viewed profile as the current account.
 
 ## API and transport
 
@@ -79,6 +79,7 @@ Scripts must not patch `fetch`, `WebSocket`, or DOM observers directly when a ki
 
 - `packages/gg-kit/tests` covers config, settings, selectors, HTTP, duel encoding, and page helpers.
 - `packages/geogamble/tests` covers the pure country/case engine and the built bundle contract.
+- `packages/better-game-history/tests` covers history merging, hydration states, feed pagination, and graph data.
 - `tests/artifacts.test.mjs` validates metadata, version, imports, and size budgets for every artifact.
 - `npm run lint` rejects hardcoded hashed classes.
 - `npm run site:build` compares the public GeoGuessr build ID with the last checked value.

@@ -13,6 +13,7 @@ export interface ListStore<T> {
   readonly available: boolean;
   readonly lastError: Error | null;
   get(): T[];
+  reload(): T[];
   set(values: readonly T[]): void;
   push(value: T): void;
   update(predicate: (value: T) => boolean, updater: (value: T) => T): void;
@@ -126,6 +127,10 @@ export function createListStore<T>(options: ListStoreOptions<T>): ListStore<T> {
     get() {
       return [...values];
     },
+    reload() {
+      read();
+      return [...values];
+    },
     set(next) {
       values = [...next].slice(0, maxEntries);
       notify();
@@ -171,9 +176,13 @@ export function createListStore<T>(options: ListStoreOptions<T>): ListStore<T> {
       return () => listeners.delete(listener);
     },
     dispose() {
+      if (disposed) return;
+      if (writeTimer) {
+        clearTimeout(writeTimer);
+        writeTimer = null;
+      }
+      write();
       disposed = true;
-      if (writeTimer) clearTimeout(writeTimer);
-      writeTimer = null;
       listeners.clear();
       if (storage && options.area !== "session") {
         pageWindow().removeEventListener("storage", onStorage);

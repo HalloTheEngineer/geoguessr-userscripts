@@ -23,7 +23,7 @@ test("legacy migration notices list every new script and stay session-dismissibl
       "GeoGamble",
       "GeoSurfer",
       "Match Notifier",
-      "Persistent Game Summary",
+      "Better Game History",
     ]) {
       assert.match(source, new RegExp(label));
     }
@@ -32,7 +32,7 @@ test("legacy migration notices list every new script and stay session-dismissibl
       "geogamble",
       "geosurfer",
       "match-notifier",
-      "persistent-game-summary",
+      "better-game-history",
     ]) {
       assert.match(source, new RegExp(`#${anchor}`));
     }

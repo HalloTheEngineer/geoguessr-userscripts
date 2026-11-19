@@ -11,6 +11,7 @@ export interface UserscriptContext<T extends Record<string, any>> {
   readonly log: (...args: unknown[]) => void;
   onCleanup(callback: () => void): void;
   onRoute(callback: (url: URL) => void): void;
+  onPageHide(callback: () => void): void;
 }
 
 export interface StartUserscriptOptions<T extends Record<string, any>> {
@@ -59,6 +60,7 @@ export function startUserscript<T extends Record<string, any>>(
 
   const cleanups: Array<() => void> = [];
   const routeCleanups: Array<() => void> = [];
+  const pageHideCallbacks: Array<() => void> = [];
   let settings: SettingsHandle | null = null;
   let stopped = false;
 
@@ -78,6 +80,9 @@ export function startUserscript<T extends Record<string, any>>(
       } catch {
         // route callback is best effort
       }
+    },
+    onPageHide(callback) {
+      pageHideCallbacks.push(callback);
     },
   };
 
@@ -102,6 +107,13 @@ export function startUserscript<T extends Record<string, any>>(
   }
 
   const onPageHide = () => {
+    for (const callback of pageHideCallbacks) {
+      try {
+        callback();
+      } catch (error) {
+        console.warn(`[${options.name}] pagehide callback failed`, error);
+      }
+    }
     options.config?.flush();
   };
   pageWindow().addEventListener("pagehide", onPageHide);
@@ -124,6 +136,7 @@ export function startUserscript<T extends Record<string, any>>(
           console.warn(`[${options.name}] route cleanup failed`, error);
         }
       }
+      pageHideCallbacks.length = 0;
       for (const cleanup of cleanups.splice(0).reverse()) {
         try {
           cleanup();

@@ -21,7 +21,7 @@ const LEGACY = [
     gistId: "c3adcee6d281d12199e7b3ebc6c489c9",
   },
   {
-    package: "persistent-game-summary",
+    package: "better-game-history",
     file: "geoguessr-persistent-game-summary.user.js",
     name: "[GeoGuessr] Persistent Game Summary & History",
     gistId: "30e6ab630a8a06d5ce16cc54454a4f8b",
@@ -61,9 +61,7 @@ function notice(legacy, configs, pagesUrl) {
 // @noframes
 // ==/UserScript==
 
-(function () {
-  "use strict";
-
+(() => {
   const PAGE = ${JSON.stringify(pagesUrl)};
   const SESSION_KEY = "gg-toolkit-migration-notice-dismissed";
 

@@ -23,7 +23,11 @@ export default {
     accent: "#38bdf8",
     order: 30,
     anchor: "geosurfer",
-    poster: "geosurfer-poster.webp",
+    previews: [
+      { src: "previews/geosurfer/01.webp", alt: "GeoSurfer in-game stats overlay" },
+      { src: "previews/geosurfer/02.webp", alt: "GeoSurfer animated preview frame" },
+      { src: "previews/geosurfer/03.webp", alt: "GeoSurfer overlay detail" },
+    ],
   },
   publish: { filename: "geoguessr-geosurfer.user.js" },
 };

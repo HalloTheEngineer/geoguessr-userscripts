@@ -3,18 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="description" content="Optional userscripts for GeoGuessr: ad blocking, gambling cases, duel alerts, history graphs, and a stats-panel video overlay." />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="Unofficial userscripts for GeoGuessr: UI cleanup, country gambling, duel alerts, history graphs, and a stats-panel video overlay." />
     <title>GeoGuessr Toolkit</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237952e9'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='sans-serif' font-weight='800' font-size='28' fill='white'%3EGT%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23111111'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='sans-serif' font-weight='800' font-size='26' fill='white'%3EGT%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#top" aria-label="GeoGuessr Toolkit home">
-        <span class="brandMark">GT</span>
-        <span>GeoGuessr Toolkit</span>
-      </a>
       <nav aria-label="Page navigation">
         <a href="#scripts">Scripts</a>
         <a href="#install">Install</a>
@@ -23,91 +20,101 @@
       </nav>
     </header>
 
-    <main id="top">
-      <section class="hero">
-        <div class="heroGlow" aria-hidden="true"></div>
-        <p class="eyebrow">Unofficial userscripts for GeoGuessr</p>
-        <h1>Small tools.<br /><span>Sharper games.</span></h1>
+    <main>
+      <section class="hero" id="top">
+        <p class="kicker">Unofficial userscripts for GeoGuessr</p>
+        <h1>GeoGuessr Toolkit</h1>
         <p class="heroCopy">
-          A focused collection of installable userscripts for cleaner UI, duel tracking,
-          match alerts, country gambling, and a stats-panel video overlay.
+          A small collection of installable tools for cleaner UI, duel tracking, match alerts,
+          country gambling, and a stats-panel video overlay.
         </p>
         <div class="heroActions">
-          <a class="primaryButton" href="#scripts">Browse scripts</a>
-          <a class="secondaryButton" href="#install">How to install</a>
+          <a class="button buttonPrimary" href="#scripts">View scripts</a>
+          <a class="button" href="#install">Installation</a>
         </div>
-        <div class="heroStats">
-          <span><strong>{{SCRIPT_COUNT}}</strong> scripts</span>
-          <span><strong>1</strong> shared settings tab</span>
-          <span><strong>0</strong> runtime dependencies</span>
-        </div>
+        <dl class="heroFacts">
+          <div><dt>Scripts</dt><dd>{{SCRIPT_COUNT}}</dd></div>
+          <div><dt>Settings</dt><dd>1 shared tab</dd></div>
+          <div><dt>Runtime dependencies</dt><dd>0</dd></div>
+        </dl>
       </section>
 
       <section id="scripts" class="section">
         <div class="sectionHeading">
           <div>
-            <p class="eyebrow">The collection</p>
-            <h2>Pick what you need.</h2>
+            <p class="kicker">Available scripts</p>
+            <h2>Scripts</h2>
           </div>
-          <p>Each script installs independently and shares the same settings surface.</p>
+          <p>Install only the scripts you need. Every script registers into the same Userscripts settings tab.</p>
         </div>
-        <div class="cards">
-          {{CARDS}}
+        <div class="scriptList">
+          {{ROWS}}
         </div>
       </section>
 
-      <section id="install" class="section splitSection">
-        <div>
-          <p class="eyebrow">Get started</p>
-          <h2>Install in a minute.</h2>
-          <p class="bodyCopy">
-            Install a userscript manager, open an install link, and confirm the install.
-            Updates are served from GitHub Pages; no manual copying is required.
-          </p>
-          <div class="managerLinks">
-            <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a>
-            <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener">Violentmonkey</a>
+      <section id="install" class="section">
+        <div class="sectionHeading">
+          <div>
+            <p class="kicker">Setup</p>
+            <h2>Installation</h2>
           </div>
         </div>
-        <ol class="steps">
-          <li><span>01</span>Install Tampermonkey or Violentmonkey.</li>
-          <li><span>02</span>Choose a script above and press Install.</li>
-          <li><span>03</span>Reload GeoGuessr and open the Userscripts settings tab.</li>
-        </ol>
+        <div class="installGrid">
+          <div>
+            <p class="bodyCopy">
+              Install a userscript manager, open an install link, and confirm the installation.
+              Updates are served from GitHub Pages.
+            </p>
+            <div class="inlineLinks">
+              <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a>
+              <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener">Violentmonkey</a>
+            </div>
+          </div>
+          <ol class="steps">
+            <li><span>01</span>Install Tampermonkey or Violentmonkey.</li>
+            <li><span>02</span>Choose a script above and press Install.</li>
+            <li><span>03</span>Reload GeoGuessr and open the Userscripts settings tab.</li>
+          </ol>
+        </div>
       </section>
 
       <section id="settings" class="section">
         <div class="sectionHeading">
           <div>
-            <p class="eyebrow">One place to configure</p>
-            <h2>Native settings, shared tab.</h2>
+            <p class="kicker">Configuration</p>
+            <h2>Settings</h2>
           </div>
         </div>
-        <div class="featurePanel">
+        <div class="infoGrid">
           <div>
-            <h3>Open GeoGuessr settings</h3>
-            <p>Every installed script registers a sub-tab in the official in-game settings dialog.</p>
+            <h3>Official settings dialog</h3>
+            <p>Each installed script registers a sub-tab in GeoGuessr's in-game settings dialog.</p>
           </div>
           <div>
             <h3>No floating overlays</h3>
-            <p>Configuration stays inside GeoGuessr's own settings UI, with native toggles, ranges, and buttons where possible.</p>
+            <p>Configuration stays inside GeoGuessr's own settings UI, using native controls where possible.</p>
           </div>
           <div>
             <h3>Stored locally</h3>
-            <p>Configuration is versioned and stored in the browser. No account or external service is required.</p>
+            <p>Settings are versioned and stored in the browser. No account or external service is required.</p>
           </div>
         </div>
       </section>
 
-      <section id="migration" class="section migration">
-        <div>
-          <p class="eyebrow">Old gists</p>
-          <h2>The gist installs have moved.</h2>
-          <p class="bodyCopy">
-            Legacy gist scripts now show a permanent migration notice. Install the current versions here and remove the old scripts from your userscript manager.
-          </p>
+      <section id="migration" class="section">
+        <div class="sectionHeading">
+          <div>
+            <p class="kicker">Old gists</p>
+            <h2>Migration</h2>
+          </div>
         </div>
-        <a class="secondaryButton" href="{{REPO_URL}}" target="_blank" rel="noopener">View source</a>
+        <div class="migrationRow">
+          <p class="bodyCopy">
+            Legacy gist scripts show a permanent notice. Install the current versions here and
+            remove the old scripts from your userscript manager.
+          </p>
+          <a class="button" href="{{REPO_URL}}" target="_blank" rel="noopener">View source</a>
+        </div>
       </section>
     </main>
 
@@ -115,5 +122,18 @@
       <p>GeoGuessr Toolkit · Unofficial community tools · MIT licensed</p>
       <p>Not affiliated with GeoGuessr.</p>
     </footer>
+
+    <dialog id="previewDialog" class="previewDialog" aria-label="Script preview">
+      <div class="previewDialogBar">
+        <span id="previewCounter" class="previewCounter"></span>
+        <button id="previewClose" class="previewClose" type="button" aria-label="Close preview">Close</button>
+      </div>
+      <div class="previewStage">
+        <button id="previewPrev" class="previewNav" type="button" aria-label="Previous preview">←</button>
+        <img id="previewImage" class="previewImage" alt="" />
+        <button id="previewNext" class="previewNav" type="button" aria-label="Next preview">→</button>
+      </div>
+      <p id="previewCaption" class="previewCaption"></p>
+    </dialog>
   </body>
 </html>

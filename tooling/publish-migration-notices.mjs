@@ -31,9 +31,13 @@ async function check(url) {
 if (confirm) {
   await check(`${pagesUrl}/`);
   for (const config of configs) {
-    await check(`${pagesUrl}/${config.publish.filename || path.basename(config.outfile)}`);
+    const filenames = [
+      config.publish.filename || path.basename(config.outfile),
+      ...(config.publish.compatibilityFilenames || []),
+    ];
+    for (const filename of filenames) await check(`${pagesUrl}/${filename}`);
   }
-  await check(`${pagesUrl}/geosurfer-poster.webp`);
+  await check(`${pagesUrl}/previews/geosurfer/01.webp`);
   console.log("Pages and artifact URLs are live.");
 }
 

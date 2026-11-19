@@ -1012,6 +1012,7 @@
     }
     const cleanups = [];
     const routeCleanups = [];
+    const pageHideCallbacks = [];
     let settings = null;
     let stopped = false;
     const context = {
@@ -1029,6 +1030,9 @@
           callback(new URL(location.href));
         } catch {
         }
+      },
+      onPageHide(callback) {
+        pageHideCallbacks.push(callback);
       }
     };
     if (options.settings && options.config) {
@@ -1050,6 +1054,13 @@
       throw error;
     }
     const onPageHide = () => {
+      for (const callback of pageHideCallbacks) {
+        try {
+          callback();
+        } catch (error) {
+          console.warn(`[${options.name}] pagehide callback failed`, error);
+        }
+      }
       options.config?.flush();
     };
     pageWindow().addEventListener("pagehide", onPageHide);
@@ -1071,6 +1082,7 @@
             console.warn(`[${options.name}] route cleanup failed`, error);
           }
         }
+        pageHideCallbacks.length = 0;
         for (const cleanup of cleanups.splice(0).reverse()) {
           try {
             cleanup();

@@ -13,9 +13,10 @@ export default {
   sizeBudget: 90000,
   site: {
     displayName: "AdBlocker",
-    summary: "Blocks known ad and analytics requests, then removes selected UI clutter.",
+    summary: "Best-effort ad and analytics blocking plus targeted UI cleanup.",
     features: [
-      "Ad and analytics blocking",
+      "Best-effort network blocking",
+      "DOM ad cleanup",
       "Homepage cleanup",
       "In-game cleanup",
       "Multiplayer cleanup",

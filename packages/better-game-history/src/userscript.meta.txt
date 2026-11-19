@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GeoGuessr Toolkit: Persistent Game Summary
+// @name         GeoGuessr Toolkit: Better Game History
 // @namespace    https://github.com/HalloTheEngineer/geoguessr-userscripts
 // @version      __VERSION__
-// @description  Tracks duel history and renders rating, score, and performance graphs.
+// @description  Keeps a reliable, account-scoped duel history with rating and performance graphs.
 // @author       PixlPainter
 // @license      MIT
 // @homepageURL  https://github.com/HalloTheEngineer/geoguessr-userscripts
