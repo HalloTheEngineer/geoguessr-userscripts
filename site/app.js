@@ -55,8 +55,14 @@
     button.title = "Install status is detected after the updated script runs on this page once.";
   };
 
+  const installRows = () => [...document.querySelectorAll("[data-script][data-script-version]")];
+  const allMarkersFound = () => {
+    const rows = installRows();
+    return rows.length > 0 && rows.every((row) => !!readInstalled(row.dataset.script));
+  };
+
   const updateInstallStatuses = () => {
-    for (const row of document.querySelectorAll("[data-script][data-script-version]")) {
+    for (const row of installRows()) {
       const button = row.querySelector("[data-install-button]");
       if (!button) continue;
       const name = row.dataset.script;
@@ -72,11 +78,36 @@
     }
   };
 
-  updateInstallStatuses();
-  window.addEventListener("load", updateInstallStatuses);
-  window.addEventListener("pageshow", updateInstallStatuses);
+  let installPoll = null;
+  const stopInstallPoll = () => {
+    if (installPoll) clearInterval(installPoll);
+    installPoll = null;
+  };
+  const startInstallPoll = () => {
+    if (installPoll || allMarkersFound()) return;
+    const started = Date.now();
+    installPoll = setInterval(() => {
+      updateInstallStatuses();
+      if (allMarkersFound() || Date.now() - started >= 8000) stopInstallPoll();
+    }, 300);
+  };
+  const refreshInstallStatuses = () => {
+    updateInstallStatuses();
+    startInstallPoll();
+  };
+
+  refreshInstallStatuses();
+  window.addEventListener("load", refreshInstallStatuses);
+  window.addEventListener("pageshow", refreshInstallStatuses);
+  window.addEventListener("focus", refreshInstallStatuses);
+  window.addEventListener("gg-toolkit-installed", refreshInstallStatuses);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopInstallPoll();
+    else refreshInstallStatuses();
+  });
+  window.addEventListener("pagehide", stopInstallPoll);
   window.addEventListener("storage", (event) => {
-    if (event.key === null || event.key?.startsWith(INSTALL_PREFIX)) updateInstallStatuses();
+    if (event.key === null || event.key?.startsWith(INSTALL_PREFIX)) refreshInstallStatuses();
   });
 
   const dialog = document.getElementById("previewDialog");

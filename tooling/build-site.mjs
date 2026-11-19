@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,12 +57,14 @@ function row(config, repo, artifactVersion, index, previews) {
 }
 
 export async function buildSite() {
-  const [template, styles, configs, repo] = await Promise.all([
+  const [template, styles, app, configs, repo] = await Promise.all([
     fs.readFile(path.join(SITE, "index.template.html"), "utf8"),
     fs.readFile(path.join(SITE, "styles.css"), "utf8"),
+    fs.readFile(path.join(SITE, "app.js"), "utf8"),
     listConfigs(),
     loadRepoConfig(),
   ]);
+  const assetVersion = createHash("sha256").update(styles).update(app).digest("hex").slice(0, 12);
   const visible = configs
     .filter((config) => config.site)
     .sort((left, right) => (left.site.order || 0) - (right.site.order || 0));
@@ -100,11 +103,12 @@ export async function buildSite() {
       "{{REPO_URL}}",
       escapeHtml(repo.repoUrl || `https://github.com/${repo.owner}/${repo.repo}`),
     )
-    .replaceAll("{{SCRIPT_COUNT}}", String(visible.length));
+    .replaceAll("{{SCRIPT_COUNT}}", String(visible.length))
+    .replaceAll("{{ASSET_VERSION}}", assetVersion);
   await fs.mkdir(OUT, { recursive: true });
   await fs.writeFile(path.join(OUT, "index.html"), html);
   await fs.writeFile(path.join(OUT, "styles.css"), styles);
-  await fs.copyFile(path.join(SITE, "app.js"), path.join(OUT, "app.js"));
+  await fs.writeFile(path.join(OUT, "app.js"), app);
   for (const config of visible) {
     for (const preview of resolvedPreviews.get(config.name) || []) {
       const previewSource = path.join(ROOT, "assets", preview.src);

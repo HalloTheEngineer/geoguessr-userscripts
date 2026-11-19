@@ -48,13 +48,23 @@ export function installedMarkerKey(name: string): string {
 }
 
 function recordInstalledScript(name: string, version: string): void {
+  const win = pageWindow();
   try {
-    pageWindow().localStorage.setItem(
+    win.localStorage.setItem(
       installedMarkerKey(name),
       JSON.stringify({ version, updatedAt: new Date().toISOString() }),
     );
   } catch {
     // Status detection is best effort.
+  }
+  try {
+    win.dispatchEvent(
+      new CustomEvent("gg-toolkit-installed", {
+        detail: { name, version },
+      }),
+    );
+  } catch {
+    // The landing page also polls localStorage as a fallback.
   }
 }
 

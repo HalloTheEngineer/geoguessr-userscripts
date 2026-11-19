@@ -1069,10 +1069,19 @@
     return `${INSTALLED_KEY_PREFIX}${name}`;
   }
   function recordInstalledScript(name, version2) {
+    const win = pageWindow();
     try {
-      pageWindow().localStorage.setItem(
+      win.localStorage.setItem(
         installedMarkerKey(name),
         JSON.stringify({ version: version2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() })
+      );
+    } catch {
+    }
+    try {
+      win.dispatchEvent(
+        new CustomEvent("gg-toolkit-installed", {
+          detail: { name, version: version2 }
+        })
       );
     } catch {
     }

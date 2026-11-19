@@ -40,7 +40,8 @@ test("GitHub Pages site contains every script and install link", async () => {
   assert.equal((html.match(/class="previewEmpty"/g) || []).length, 4);
   assert.match(html, /previewDialog/);
   assert.match(html, /previewImage/);
-  assert.match(html, /src="app\.js"/);
+  assert.match(html, /src="app\.js\?v=[a-f0-9]+"/);
+  assert.match(html, /href="styles\.css\?v=[a-f0-9]+"/);
   assert.match(html, /previews\/geosurfer\/01\.webp/);
   assert.doesNotMatch(html, /<script[^>]+src="https?:/);
 });
