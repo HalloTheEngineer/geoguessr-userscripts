@@ -34,9 +34,37 @@ function guardKey(name: string): string {
   return `__GG_${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_LOADED__`;
 }
 
+export const TOOLKIT_LANDING_HOST = "hallotheengineer.github.io";
+export const TOOLKIT_LANDING_PATH = "/geoguessr-userscripts";
+export const INSTALLED_KEY_PREFIX = "gg-toolkit.installed.v1.";
+
+export function isToolkitLandingPage(pathname = location.pathname): boolean {
+  if (location.hostname !== TOOLKIT_LANDING_HOST) return false;
+  return pathname === TOOLKIT_LANDING_PATH || pathname.startsWith(`${TOOLKIT_LANDING_PATH}/`);
+}
+
+export function installedMarkerKey(name: string): string {
+  return `${INSTALLED_KEY_PREFIX}${name}`;
+}
+
+function recordInstalledScript(name: string, version: string): void {
+  try {
+    pageWindow().localStorage.setItem(
+      installedMarkerKey(name),
+      JSON.stringify({ version, updatedAt: new Date().toISOString() }),
+    );
+  } catch {
+    // Status detection is best effort.
+  }
+}
+
 export function startUserscript<T extends Record<string, any>>(
   options: StartUserscriptOptions<T>,
 ): UserscriptHandle {
+  if (isToolkitLandingPage()) {
+    recordInstalledScript(options.name, options.version);
+    return { started: false, context: null, stop: () => {} };
+  }
   const win = pageWindow() as unknown as Record<string, any>;
   const key = guardKey(options.name);
   if (win[key]) {

@@ -21,6 +21,10 @@ for (const config of configs) {
     assert.match(source, /@name\s+GeoGuessr Toolkit: /);
     assert.match(source, /@version\s+\d{4}\.\d{1,2}\.\d{1,2}(?:\.\d+)?/);
     assert.match(source, /@match\s+https:\/\/www\.geoguessr\.com\/\*/);
+    assert.match(
+      source,
+      /@match\s+https:\/\/hallotheengineer\.github\.io\/geoguessr-userscripts\/\*/,
+    );
     assert.match(source, /@run-at\s+document-start/);
     assert.match(
       source,

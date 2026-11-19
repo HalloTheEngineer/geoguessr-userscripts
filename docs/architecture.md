@@ -44,7 +44,7 @@ export default {
 
 `packages/gg-kit/src/config` owns schema-driven config: defaults, validation, sparse writes, subscriptions, reset/clear, migrations, and import/export. `packages/gg-kit/src/settings` owns the shared **Userscripts** native tab, script sub-tabs, full native class detection, native toggle/range/select/button structures, section cards, control rendering, section ordering, and disposal. Settings are exposed only through the official in-game settings dialog; there is no floating settings overlay. Scripts define a schema and register sections; they do not create their own settings tabs, panels, or control implementations.
 
-`packages/gg-kit/src/app` provides `startUserscript`, which owns run guards, top-frame checks, config loading, settings registration, route listeners, cleanup, and `pagehide` flushing.
+`packages/gg-kit/src/app` provides `startUserscript`, which owns run guards, top-frame checks, config loading, settings registration, route listeners, cleanup, and `pagehide` flushing. It also records installed script versions when executed on the GitHub Pages landing page and exits without initializing game behavior.
 
 ## Shared runtime
 

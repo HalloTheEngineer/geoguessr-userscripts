@@ -123,6 +123,24 @@ h1 {
   background: var(--accent);
   border-color: var(--accent);
 }
+.buttonInstalled {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--faint);
+  cursor: default;
+}
+.buttonInstalled:hover {
+  border-color: var(--line);
+}
+.buttonUpdate {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accentText);
+}
+.buttonUpdate:hover {
+  background: #482bd0;
+  border-color: #482bd0;
+}
 .heroFacts {
   display: flex;
   gap: 2rem;
@@ -305,6 +323,14 @@ h3 {
   color: var(--text);
   font-size: 0.68rem;
   text-underline-offset: 0.2em;
+}
+.installStatusNote {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  color: var(--faint);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  line-height: 1.5;
 }
 .steps {
   margin: 0;

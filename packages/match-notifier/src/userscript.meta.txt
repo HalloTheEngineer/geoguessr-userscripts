@@ -10,6 +10,7 @@
 // @updateURL    __UPDATE_URL__
 // @downloadURL  __DOWNLOAD_URL__
 // @match        https://www.geoguessr.com/*
+// @match        https://hallotheengineer.github.io/geoguessr-userscripts/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=geoguessr.com
 // @grant        unsafeWindow
 // @run-at       document-start

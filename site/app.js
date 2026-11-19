@@ -1,4 +1,84 @@
 (() => {
+  const INSTALL_PREFIX = "gg-toolkit.installed.v1.";
+
+  const versionParts = (version) =>
+    String(version || "")
+      .split("-")[0]
+      .split(".")
+      .map((part) => Number(part) || 0);
+
+  const compareVersions = (left, right) => {
+    const a = versionParts(left);
+    const b = versionParts(right);
+    for (let index = 0; index < Math.max(a.length, b.length); index++) {
+      const delta = (a[index] || 0) - (b[index] || 0);
+      if (delta) return delta;
+    }
+    return 0;
+  };
+
+  const readInstalled = (name) => {
+    try {
+      const raw = localStorage.getItem(`${INSTALL_PREFIX}${name}`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return typeof parsed?.version === "string" ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setButtonState = (button, state, installed, current) => {
+    button.dataset.installStatus = state;
+    button.classList.remove("buttonInstalled", "buttonUpdate");
+    button.removeAttribute("aria-disabled");
+    button.removeAttribute("title");
+    if (!button.dataset.installHref) {
+      button.dataset.installHref = button.getAttribute("href") || "";
+    }
+    if (state === "installed") {
+      button.textContent = "INSTALLED";
+      button.classList.add("buttonInstalled");
+      button.setAttribute("aria-disabled", "true");
+      button.removeAttribute("href");
+      button.title = `Installed version ${installed?.version || "unknown"}${current ? ` (current ${current})` : ""}`;
+      return;
+    }
+    button.setAttribute("href", button.dataset.installHref);
+    if (state === "update") {
+      button.textContent = "UPDATE";
+      button.classList.add("buttonUpdate");
+      button.title = `Installed version ${installed?.version || "unknown"}; update to ${current}`;
+      return;
+    }
+    button.textContent = "Install";
+    button.title = "Install status is detected after the updated script runs on this page once.";
+  };
+
+  const updateInstallStatuses = () => {
+    for (const row of document.querySelectorAll("[data-script][data-script-version]")) {
+      const button = row.querySelector("[data-install-button]");
+      if (!button) continue;
+      const name = row.dataset.script;
+      const current = row.dataset.scriptVersion || "";
+      const installed = readInstalled(name);
+      if (!installed) {
+        setButtonState(button, "install", null, current);
+      } else if (current && compareVersions(installed.version, current) < 0) {
+        setButtonState(button, "update", installed, current);
+      } else {
+        setButtonState(button, "installed", installed, current);
+      }
+    }
+  };
+
+  updateInstallStatuses();
+  window.addEventListener("load", updateInstallStatuses);
+  window.addEventListener("pageshow", updateInstallStatuses);
+  window.addEventListener("storage", (event) => {
+    if (event.key === null || event.key?.startsWith(INSTALL_PREFIX)) updateInstallStatuses();
+  });
+
   const dialog = document.getElementById("previewDialog");
   if (!dialog) return;
   const image = document.getElementById("previewImage");

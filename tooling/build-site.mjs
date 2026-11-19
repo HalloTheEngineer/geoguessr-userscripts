@@ -37,18 +37,19 @@ function row(config, repo, artifactVersion, index, previews) {
   const legacyAnchors = (site.legacyAnchors || [])
     .map((anchor) => `<span id="${escapeHtml(anchor)}" class="legacyAnchor" hidden></span>`)
     .join("");
+  const version = artifactVersion || config.packageJson.version;
   return `${legacyAnchors}
-    <article class="scriptRow" id="${escapeHtml(site.anchor || config.name)}" style="--accent: ${escapeHtml(site.accent || "#5b3df5")}">
+    <article class="scriptRow" id="${escapeHtml(site.anchor || config.name)}" data-script="${escapeHtml(config.name)}" data-script-version="${escapeHtml(version)}" style="--accent: ${escapeHtml(site.accent || "#5b3df5")}">
       <div class="scriptIndex">${String(index + 1).padStart(2, "0")}</div>
       <div class="scriptInfo">
         <h3>${escapeHtml(title)}</h3>
         <p class="scriptSummary">${escapeHtml(site.summary || config.packageJson.description || "")}</p>
         <ul class="scriptTags">${features}</ul>
-        <div class="scriptMeta">v${escapeHtml(artifactVersion || config.packageJson.version)}</div>
+        <div class="scriptMeta">v${escapeHtml(version)}</div>
       </div>
       <div class="scriptPreview">${gallery}</div>
       <div class="scriptActions">
-        <a class="button buttonPrimary" href="${escapeHtml(filename)}">Install</a>
+        <a class="button buttonPrimary" data-install-button href="${escapeHtml(filename)}">Install</a>
         <a class="sourceLink" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Source</a>
       </div>
     </article>`;

@@ -27,6 +27,10 @@ test("GitHub Pages site contains every script and install link", async () => {
   }
   assert.match(html, /id="better-game-history"/);
   assert.match(html, /id="persistent-game-summary"/);
+  assert.match(html, /data-script="better-game-history"/);
+  assert.match(html, /data-script-version="[^"]+"/);
+  assert.match(html, /data-install-button/);
+  assert.match(html, /installStatusNote/);
   assert.doesNotMatch(html, /undefined\/tree/);
   assert.match(html, /<h1>GeoGuessr Toolkit<\/h1>/);
   assert.doesNotMatch(html, /class="brand"/);

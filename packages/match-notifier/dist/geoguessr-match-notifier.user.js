@@ -10,6 +10,7 @@
 // @updateURL    https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-match-notifier.user.js
 // @downloadURL  https://hallotheengineer.github.io/geoguessr-userscripts/geoguessr-match-notifier.user.js
 // @match        https://www.geoguessr.com/*
+// @match        https://hallotheengineer.github.io/geoguessr-userscripts/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=geoguessr.com
 // @grant        unsafeWindow
 // @run-at       document-start
@@ -990,7 +991,31 @@
   function guardKey(name) {
     return `__GG_${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_LOADED__`;
   }
+  var TOOLKIT_LANDING_HOST = "hallotheengineer.github.io";
+  var TOOLKIT_LANDING_PATH = "/geoguessr-userscripts";
+  var INSTALLED_KEY_PREFIX = "gg-toolkit.installed.v1.";
+  function isToolkitLandingPage(pathname = location.pathname) {
+    if (location.hostname !== TOOLKIT_LANDING_HOST) return false;
+    return pathname === TOOLKIT_LANDING_PATH || pathname.startsWith(`${TOOLKIT_LANDING_PATH}/`);
+  }
+  function installedMarkerKey(name) {
+    return `${INSTALLED_KEY_PREFIX}${name}`;
+  }
+  function recordInstalledScript(name, version) {
+    try {
+      pageWindow().localStorage.setItem(
+        installedMarkerKey(name),
+        JSON.stringify({ version, updatedAt: (/* @__PURE__ */ new Date()).toISOString() })
+      );
+    } catch {
+    }
+  }
   function startUserscript(options) {
+    if (isToolkitLandingPage()) {
+      recordInstalledScript(options.name, options.version);
+      return { started: false, context: null, stop: () => {
+      } };
+    }
     const win = pageWindow();
     const key = guardKey(options.name);
     if (win[key]) {
