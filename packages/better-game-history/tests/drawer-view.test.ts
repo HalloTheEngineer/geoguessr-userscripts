@@ -41,7 +41,11 @@ function record(overrides: Partial<GameRecord> = {}): GameRecord {
 
 test("drawer keeps row nodes stable and updates only changed rows", () => {
   document.body.innerHTML = "";
-  const view = createDrawerView({ onGraph: () => {}, onOpenGame: () => {} });
+  const view = createDrawerView({
+    onGraph: () => {},
+    onOpenGame: () => {},
+    nameFor: (_id, fallback) => fallback || "Unknown",
+  });
   view.setVisible(true);
   view.render([record(), record({ gameId: "game-2", opponent: "Other" })], null);
   const first = document.querySelector<HTMLElement>('[data-game-id="game-1"]');
@@ -57,5 +61,33 @@ test("drawer keeps row nodes stable and updates only changed rows", () => {
   assert.equal(document.querySelector('[data-game-id="game-1"]'), first);
   assert.notEqual(document.querySelector('[data-game-id="game-2"]'), second);
   assert.match(document.querySelector('[data-game-id="game-2"]')?.textContent || "", /Changed/);
+  view.dispose();
+});
+
+test("drawer hover preserves open state when moving from tab into drawer", async () => {
+  document.body.innerHTML = "";
+  const view = createDrawerView({
+    onGraph: () => {},
+    onOpenGame: () => {},
+    nameFor: (_id, fallback) => fallback || "Unknown",
+  });
+  view.setVisible(true);
+  const root = document.getElementById("bgh-history-drawer-root");
+  const tab = document.getElementById("bgh-drawer-trigger-tab");
+  const drawer = document.getElementById("bgh-history-drawer");
+  assert.ok(root);
+  assert.ok(tab);
+  assert.ok(drawer);
+
+  tab.dispatchEvent(new dom.Event("pointerenter"));
+  assert.equal(root.classList.contains("bgh-open"), true);
+  tab.dispatchEvent(new dom.Event("pointerleave"));
+  drawer.dispatchEvent(new dom.Event("pointerenter"));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(root.classList.contains("bgh-open"), true);
+
+  drawer.dispatchEvent(new dom.Event("pointerleave"));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(root.classList.contains("bgh-open"), false);
   view.dispose();
 });

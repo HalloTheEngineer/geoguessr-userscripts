@@ -10,6 +10,7 @@ const STYLES = `
   pointer-events: none; font-family: var(--font-neo-sans, sans-serif); color: #fff;
 }
 #bgh-history-drawer {
+  position: relative; z-index: 1;
   width: min(400px, 92vw); height: 100%; display: flex; flex-direction: column;
   background: rgba(18, 18, 35, 0.94); border-right: 1px solid rgba(255,255,255,.15);
   box-shadow: 20px 0 60px rgba(0,0,0,.4); backdrop-filter: blur(30px);
@@ -17,9 +18,8 @@ const STYLES = `
   pointer-events: auto; overflow: hidden;
 }
 #bgh-history-drawer-root.bgh-open #bgh-history-drawer { transform: translateX(0); }
-#bgh-history-drawer-root.bgh-open #bgh-drawer-trigger-tab { opacity: 0; pointer-events: none; }
 #bgh-drawer-trigger-tab {
-  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 0;
   width: 30px; height: 120px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-left: 0;
   border-radius: 0 16px 16px 0; background: rgba(121,82,233,.3); color: #fff;
   cursor: pointer; font-size: 24px; line-height: 1; pointer-events: auto;
@@ -60,6 +60,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
 export interface DrawerViewOptions {
   onGraph: () => void;
   onOpenGame: (record: Pick<GameRecord, "gameId" | "isTeamDuel">) => void;
+  nameFor: (playerId: string | undefined, fallback?: string) => string;
 }
 
 export interface DrawerView {
@@ -72,13 +73,17 @@ function kindLabel(record: GameRecord): string {
   return `${record.isTeamDuel ? "TEAM " : ""}${record.mode}`;
 }
 
-function rowSignature(record: GameRecord, active: boolean): string {
+function rowSignature(
+  record: GameRecord,
+  active: boolean,
+  nameFor: DrawerViewOptions["nameFor"],
+): string {
   return [
     record.gameId,
     record.time,
     record.mode,
     record.isTeamDuel ? "1" : "0",
-    record.opponent || "",
+    nameFor(record.opponentId, record.opponent),
     record.opponentId || "",
     record.win === undefined ? "" : record.win ? "1" : "0",
     record.ratingChange === undefined ? "" : String(record.ratingChange),
@@ -87,8 +92,12 @@ function rowSignature(record: GameRecord, active: boolean): string {
   ].join("|");
 }
 
-function rowHtml(record: GameRecord, active: boolean): string {
-  const opponent = record.opponent || "Unknown Opponent";
+function rowHtml(
+  record: GameRecord,
+  active: boolean,
+  nameFor: DrawerViewOptions["nameFor"],
+): string {
+  const opponent = nameFor(record.opponentId, record.opponent);
   const opponentHtml = record.opponentId
     ? `<a class="bgh-history-opponent" href="/user/${escapeHtml(record.opponentId)}" target="_blank" rel="noopener">${escapeHtml(opponent)}</a>`
     : `<span class="bgh-history-opponent">${escapeHtml(opponent)}</span>`;
@@ -129,9 +138,36 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
   let scrollArea: HTMLElement | null = null;
   let activeId: string | null = null;
   let visible = false;
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const close = () => root?.classList.remove("bgh-open");
-  const open = () => root?.classList.add("bgh-open");
+  const setOpen = (next: boolean) => {
+    if (!root) return;
+    root.classList.toggle("bgh-open", next);
+    root
+      .querySelector<HTMLButtonElement>("#bgh-drawer-trigger-tab")
+      ?.setAttribute("aria-expanded", String(next));
+  };
+  const cancelClose = () => {
+    if (closeTimer) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+  };
+  const open = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const close = () => {
+    cancelClose();
+    setOpen(false);
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer = setTimeout(() => {
+      closeTimer = null;
+      setOpen(false);
+    }, 450);
+  };
 
   const mount = () => {
     if (root || !document.body) return;
@@ -152,19 +188,28 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     root
       .querySelector<HTMLButtonElement>("#bgh-show-graph")
       ?.addEventListener("click", options.onGraph);
-    tab?.addEventListener("click", open);
+    tab?.addEventListener("pointerenter", open);
+    tab?.addEventListener("pointerleave", scheduleClose);
+    tab?.addEventListener("focus", open);
+    tab?.addEventListener("click", () => {
+      if (root?.classList.contains("bgh-open")) close();
+      else open();
+    });
     tab?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         open();
       }
     });
+    drawer?.addEventListener("pointerenter", open);
+    drawer?.addEventListener("pointerleave", scheduleClose);
+    drawer?.addEventListener("focusin", open);
+    drawer?.addEventListener("focusout", (event) => {
+      if (!root?.contains(event.relatedTarget as Node | null)) scheduleClose();
+    });
     drawer?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
-    root.addEventListener("mouseenter", open);
-    root.addEventListener("mouseleave", close);
-    root.addEventListener("focusin", open);
     const openRow = (row: HTMLElement) => {
       if (!row.dataset.gameId) return;
       options.onOpenGame({
@@ -209,11 +254,11 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     }
     const rows: HTMLElement[] = [];
     for (const record of records) {
-      const signature = rowSignature(record, record.gameId === activeId);
+      const signature = rowSignature(record, record.gameId === activeId, options.nameFor);
       let row = existing.get(record.gameId);
       if (!row || row.dataset.signature !== signature) {
         const template = document.createElement("template");
-        template.innerHTML = rowHtml(record, record.gameId === activeId);
+        template.innerHTML = rowHtml(record, record.gameId === activeId, options.nameFor);
         const nextRow = template.content.firstElementChild as HTMLElement | null;
         if (!nextRow) continue;
         if (row) row.replaceWith(nextRow);
@@ -235,6 +280,7 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     setVisible(next) {
       visible = next;
       if (!visible) {
+        cancelClose();
         root?.remove();
         root = null;
         scrollArea = null;
@@ -243,6 +289,7 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
       mount();
     },
     dispose() {
+      cancelClose();
       root?.remove();
       root = null;
       scrollArea = null;

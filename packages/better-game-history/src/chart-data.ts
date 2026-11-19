@@ -63,7 +63,10 @@ export interface TeamOption {
   count: number;
 }
 
-export function getTeamOptions(records: readonly GameRecord[]): TeamOption[] {
+export function getTeamOptions(
+  records: readonly GameRecord[],
+  nameFor: (playerId: string | undefined, fallback?: string) => string,
+): TeamOption[] {
   const teams = new Map<string, TeamOption>();
   for (const record of records) {
     if (!record.isTeamDuel || !record.teamKey) continue;
@@ -88,6 +91,8 @@ export function getChartData(
     "timeframe" | "metric" | "typeFilter" | "modeFilter" | "queue" | "teamKey"
   >,
   now = Date.now(),
+  nameFor: (playerId: string | undefined, fallback?: string) => string = (_id, fallback) =>
+    fallback || "#unknown",
 ): GraphPoint[] {
   const points: GraphPoint[] = [];
   const queue = filters.queue || "solo";
@@ -113,7 +118,11 @@ export function getChartData(
     if (value === null || !Number.isFinite(value)) continue;
     const date = new Date(record.time);
     if (Number.isNaN(date.getTime())) continue;
-    const teammates = (record.teammateNicks || []).join(" & ");
+    const teammateIds = record.teammateIds || [];
+    const teammateNicks = record.teammateNicks || [];
+    const teammateLabel = teammateIds.length
+      ? teammateIds.map((playerId, index) => nameFor(playerId, teammateNicks[index])).join(" & ")
+      : teammateNicks.filter(Boolean).join(" & ");
     points.push({
       time: record.time,
       label: pointLabel(date, filters.timeframe),
@@ -121,12 +130,12 @@ export function getChartData(
       dailyKey: dayKey(date),
       monthlyKey: monthKey(date),
       value,
-      opponent: record.opponent || "Unknown Opponent",
+      opponent: nameFor(record.opponentId, record.opponent),
       mode: record.mode,
       gameId: record.gameId,
       isTeamDuel: record.isTeamDuel,
       teamKey: record.teamKey,
-      teamLabel: teammates ? `You + ${teammates}` : undefined,
+      teamLabel: teammateLabel ? `You + ${teammateLabel}` : undefined,
     });
   }
   return points.sort(

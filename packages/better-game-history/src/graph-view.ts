@@ -79,7 +79,7 @@ const FILTERS: Array<{
 ];
 
 const STYLES = `
-#bgh-history-graph { border: 0; padding: 0; background: transparent; color: #fff; max-width: none; max-height: none; }
+#bgh-history-graph { border: 0; padding: 0; background: transparent; color: #fff; max-width: none; max-height: none; color-scheme: dark; }
 #bgh-history-graph::backdrop { background: rgba(10,10,20,.74); backdrop-filter: blur(12px); }
 #bgh-graph-shell { width: min(1300px, 94vw); max-height: 92vh; display: flex; flex-direction: column; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.15); border-radius: 24px; background: rgba(26,26,46,.98); box-shadow: 0 40px 150px rgba(0,0,0,.6); overflow: auto; font-family: var(--font-neo-sans, sans-serif); }
 #bgh-graph-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
@@ -91,13 +91,18 @@ const STYLES = `
 .bgh-graph-filter.bgh-active { background: #7952e9; color: #fff; }
 .bgh-graph-filter:focus-visible, #bgh-graph-close:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-team { align-items: center; gap: 8px; padding-left: 10px; color: #999; font-size: 10px; font-weight: 800; }
-.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 11px; }
+.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background-color: #1a1a2d; color: #f7f5ff; font: inherit; font-size: 11px; color-scheme: dark; }
+.bgh-graph-select option { background-color: #1a1a2d; color: #f7f5ff; }
 .bgh-graph-select:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-chart { position: relative; flex: 1; min-height: 420px; }
 .bgh-graph-empty { min-height: 420px; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
 .bgh-graph-note { color: rgba(255,255,255,.5); font-size: 11px; }
 @media (max-width: 700px) { #bgh-graph-shell { padding: 18px; } .bgh-graph-chart, .bgh-graph-empty { min-height: 300px; } }
 `;
+
+export interface GraphViewOptions {
+  nameFor: (playerId: string | undefined, fallback?: string) => string;
+}
 
 export interface GraphView {
   open(records: readonly GameRecord[], filters: GraphFilters): void;
@@ -125,7 +130,7 @@ function finiteNumbers(values: unknown[]): number[] {
   );
 }
 
-export function createGraphView(): GraphView {
+export function createGraphView(options: GraphViewOptions): GraphView {
   const style = injectStyle(STYLE_ID, STYLES);
   let dialog: HTMLDialogElement | null = null;
   let chart: Chart | null = null;
@@ -160,7 +165,7 @@ export function createGraphView(): GraphView {
     if (!dialog) return;
     chart?.destroy();
     chart = null;
-    const teamOptions = getTeamOptions(records);
+    const teamOptions = getTeamOptions(records, options.nameFor);
     if (filters.queue === "team") {
       if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
         filters.teamKey = teamOptions[0]?.key || "";
@@ -168,7 +173,7 @@ export function createGraphView(): GraphView {
     } else {
       filters.teamKey = "";
     }
-    const chartData = getChartData(records, filters);
+    const chartData = getChartData(records, filters, Date.now(), options.nameFor);
     const shell = dialog.querySelector<HTMLElement>("#bgh-graph-shell");
     if (!shell) return;
     const title = shell.querySelector<HTMLElement>("#bgh-graph-title");
@@ -371,7 +376,7 @@ export function createGraphView(): GraphView {
       maximum = Math.max(maximum, 0.5);
     }
     const padding = maximum - minimum === 0 ? 5 : (maximum - minimum) * 0.1;
-    const options: any = {
+    const chartOptions: any = {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { intersect: false, mode: "index" },

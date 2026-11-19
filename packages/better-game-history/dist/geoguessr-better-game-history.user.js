@@ -1613,10 +1613,59 @@
     return fetchJson(`${API.duelServer}${encodeURIComponent(gameId2)}`);
   }
 
-  // ../gg-kit/src/storage/list-store.ts
-  function storageArea(area2) {
+  // ../gg-kit/src/storage/json-store.ts
+  function area2(kind) {
     try {
-      return area2 === "session" ? sessionStorage : localStorage;
+      return kind === "session" ? sessionStorage : localStorage;
+    } catch {
+      return null;
+    }
+  }
+  function isEnvelope(value) {
+    return !!value && typeof value === "object" && "v" in value && "data" in value;
+  }
+  function createJsonStore(options) {
+    const storage = area2(options.area);
+    return {
+      key: options.key,
+      get available() {
+        return !!storage;
+      },
+      get() {
+        if (!storage) return null;
+        try {
+          const raw = storage.getItem(options.key);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!isEnvelope(parsed) || parsed.v !== options.version) return null;
+          return parsed.data;
+        } catch {
+          return null;
+        }
+      },
+      set(value) {
+        if (!storage) return;
+        try {
+          storage.setItem(options.key, JSON.stringify({ v: options.version, data: value }));
+        } catch (error) {
+          console.warn(`[gg-kit] could not persist ${options.key}`, error);
+        }
+      },
+      remove() {
+        try {
+          storage?.removeItem(options.key);
+        } catch {
+        }
+      },
+      dispose() {
+      }
+    };
+  }
+
+  // ../gg-kit/src/storage/list-store.ts
+  function storageArea(area3) {
+    try {
+      return area3 === "session" ? sessionStorage : localStorage;
     } catch {
       return null;
     }
@@ -2059,6 +2108,7 @@
   pointer-events: none; font-family: var(--font-neo-sans, sans-serif); color: #fff;
 }
 #bgh-history-drawer {
+  position: relative; z-index: 1;
   width: min(400px, 92vw); height: 100%; display: flex; flex-direction: column;
   background: rgba(18, 18, 35, 0.94); border-right: 1px solid rgba(255,255,255,.15);
   box-shadow: 20px 0 60px rgba(0,0,0,.4); backdrop-filter: blur(30px);
@@ -2066,9 +2116,8 @@
   pointer-events: auto; overflow: hidden;
 }
 #bgh-history-drawer-root.bgh-open #bgh-history-drawer { transform: translateX(0); }
-#bgh-history-drawer-root.bgh-open #bgh-drawer-trigger-tab { opacity: 0; pointer-events: none; }
 #bgh-drawer-trigger-tab {
-  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 0;
   width: 30px; height: 120px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-left: 0;
   border-radius: 0 16px 16px 0; background: rgba(121,82,233,.3); color: #fff;
   cursor: pointer; font-size: 24px; line-height: 1; pointer-events: auto;
@@ -2108,13 +2157,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   function kindLabel(record) {
     return `${record.isTeamDuel ? "TEAM " : ""}${record.mode}`;
   }
-  function rowSignature(record, active) {
+  function rowSignature(record, active, nameFor) {
     return [
       record.gameId,
       record.time,
       record.mode,
       record.isTeamDuel ? "1" : "0",
-      record.opponent || "",
+      nameFor(record.opponentId, record.opponent),
       record.opponentId || "",
       record.win === void 0 ? "" : record.win ? "1" : "0",
       record.ratingChange === void 0 ? "" : String(record.ratingChange),
@@ -2122,8 +2171,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       active ? "1" : "0"
     ].join("|");
   }
-  function rowHtml(record, active) {
-    const opponent = record.opponent || "Unknown Opponent";
+  function rowHtml(record, active, nameFor) {
+    const opponent = nameFor(record.opponentId, record.opponent);
     const opponentHtml = record.opponentId ? `<a class="bgh-history-opponent" href="/user/${escapeHtml(record.opponentId)}" target="_blank" rel="noopener">${escapeHtml(opponent)}</a>` : `<span class="bgh-history-opponent">${escapeHtml(opponent)}</span>`;
     const change = isFiniteNumber(record.ratingChange) ? formatRatingChange(record.ratingChange) : record.hydration.state === "pending" ? "..." : "—";
     const changeColor = isFiniteNumber(record.ratingChange) && record.ratingChange > 0 ? "#4caf50" : isFiniteNumber(record.ratingChange) && record.ratingChange < 0 ? "#ff5252" : "#aaa";
@@ -2144,8 +2193,33 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     let scrollArea = null;
     let activeId = null;
     let visible = false;
-    const close = () => root?.classList.remove("bgh-open");
-    const open = () => root?.classList.add("bgh-open");
+    let closeTimer = null;
+    const setOpen = (next) => {
+      if (!root) return;
+      root.classList.toggle("bgh-open", next);
+      root.querySelector("#bgh-drawer-trigger-tab")?.setAttribute("aria-expanded", String(next));
+    };
+    const cancelClose = () => {
+      if (closeTimer) {
+        clearTimeout(closeTimer);
+        closeTimer = null;
+      }
+    };
+    const open = () => {
+      cancelClose();
+      setOpen(true);
+    };
+    const close = () => {
+      cancelClose();
+      setOpen(false);
+    };
+    const scheduleClose = () => {
+      cancelClose();
+      closeTimer = setTimeout(() => {
+        closeTimer = null;
+        setOpen(false);
+      }, 450);
+    };
     const mount = () => {
       if (root || !document.body) return;
       root = document.createElement("div");
@@ -2163,19 +2237,28 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const tab = root.querySelector("#bgh-drawer-trigger-tab");
       scrollArea = root.querySelector("#bgh-history-scroll-area");
       root.querySelector("#bgh-show-graph")?.addEventListener("click", options.onGraph);
-      tab?.addEventListener("click", open);
+      tab?.addEventListener("pointerenter", open);
+      tab?.addEventListener("pointerleave", scheduleClose);
+      tab?.addEventListener("focus", open);
+      tab?.addEventListener("click", () => {
+        if (root?.classList.contains("bgh-open")) close();
+        else open();
+      });
       tab?.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           open();
         }
       });
+      drawer?.addEventListener("pointerenter", open);
+      drawer?.addEventListener("pointerleave", scheduleClose);
+      drawer?.addEventListener("focusin", open);
+      drawer?.addEventListener("focusout", (event) => {
+        if (!root?.contains(event.relatedTarget)) scheduleClose();
+      });
       drawer?.addEventListener("keydown", (event) => {
         if (event.key === "Escape") close();
       });
-      root.addEventListener("mouseenter", open);
-      root.addEventListener("mouseleave", close);
-      root.addEventListener("focusin", open);
       const openRow = (row) => {
         if (!row.dataset.gameId) return;
         options.onOpenGame({
@@ -2219,11 +2302,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       }
       const rows = [];
       for (const record of records) {
-        const signature = rowSignature(record, record.gameId === activeId);
+        const signature = rowSignature(record, record.gameId === activeId, options.nameFor);
         let row = existing.get(record.gameId);
         if (!row || row.dataset.signature !== signature) {
           const template = document.createElement("template");
-          template.innerHTML = rowHtml(record, record.gameId === activeId);
+          template.innerHTML = rowHtml(record, record.gameId === activeId, options.nameFor);
           const nextRow = template.content.firstElementChild;
           if (!nextRow) continue;
           if (row) row.replaceWith(nextRow);
@@ -2242,6 +2325,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       setVisible(next) {
         visible = next;
         if (!visible) {
+          cancelClose();
           root?.remove();
           root = null;
           scrollArea = null;
@@ -2250,6 +2334,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         mount();
       },
       dispose() {
+        cancelClose();
         root?.remove();
         root = null;
         scrollArea = null;
@@ -4142,14 +4227,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       ctx.stroke();
     }
   }
-  function _isPointInArea(point, area2, margin) {
+  function _isPointInArea(point, area3, margin) {
     margin = margin || 0.5;
-    return !area2 || point && point.x > area2.left - margin && point.x < area2.right + margin && point.y > area2.top - margin && point.y < area2.bottom + margin;
+    return !area3 || point && point.x > area3.left - margin && point.x < area3.right + margin && point.y > area3.top - margin && point.y < area3.bottom + margin;
   }
-  function clipArea(ctx, area2) {
+  function clipArea(ctx, area3) {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(area2.left, area2.top, area2.right - area2.left, area2.bottom - area2.top);
+    ctx.rect(area3.left, area3.top, area3.right - area3.left, area3.bottom - area3.top);
     ctx.clip();
   }
   function unclipArea(ctx) {
@@ -4776,28 +4861,28 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   function capControlPoint(pt, min, max) {
     return Math.max(Math.min(pt, max), min);
   }
-  function capBezierPoints(points, area2) {
+  function capBezierPoints(points, area3) {
     let i, ilen, point, inArea, inAreaPrev;
-    let inAreaNext = _isPointInArea(points[0], area2);
+    let inAreaNext = _isPointInArea(points[0], area3);
     for (i = 0, ilen = points.length; i < ilen; ++i) {
       inAreaPrev = inArea;
       inArea = inAreaNext;
-      inAreaNext = i < ilen - 1 && _isPointInArea(points[i + 1], area2);
+      inAreaNext = i < ilen - 1 && _isPointInArea(points[i + 1], area3);
       if (!inArea) {
         continue;
       }
       point = points[i];
       if (inAreaPrev) {
-        point.cp1x = capControlPoint(point.cp1x, area2.left, area2.right);
-        point.cp1y = capControlPoint(point.cp1y, area2.top, area2.bottom);
+        point.cp1x = capControlPoint(point.cp1x, area3.left, area3.right);
+        point.cp1y = capControlPoint(point.cp1y, area3.top, area3.bottom);
       }
       if (inAreaNext) {
-        point.cp2x = capControlPoint(point.cp2x, area2.left, area2.right);
-        point.cp2y = capControlPoint(point.cp2y, area2.top, area2.bottom);
+        point.cp2x = capControlPoint(point.cp2x, area3.left, area3.right);
+        point.cp2y = capControlPoint(point.cp2y, area3.top, area3.bottom);
       }
     }
   }
-  function _updateBezierControlPoints(points, options, area2, loop, indexAxis) {
+  function _updateBezierControlPoints(points, options, area3, loop, indexAxis) {
     let i, ilen, point, controlPoints;
     if (options.spanGaps) {
       points = points.filter((pt) => !pt.skip);
@@ -4817,7 +4902,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       }
     }
     if (options.capBezierPoints) {
-      capBezierPoints(points, area2);
+      capBezierPoints(points, area3);
     }
   }
   function _isDomSupported() {
@@ -5405,12 +5490,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     if (clip.disabled) {
       return false;
     }
-    const area2 = getDatasetArea(meta, chart.chartArea);
+    const area3 = getDatasetArea(meta, chart.chartArea);
     return {
-      left: clip.left === false ? 0 : area2.left - (clip.left === true ? 0 : clip.left),
-      right: clip.right === false ? chart.width : area2.right + (clip.right === true ? 0 : clip.right),
-      top: clip.top === false ? 0 : area2.top - (clip.top === true ? 0 : clip.top),
-      bottom: clip.bottom === false ? chart.height : area2.bottom + (clip.bottom === true ? 0 : clip.bottom)
+      left: clip.left === false ? 0 : area3.left - (clip.left === true ? 0 : clip.left),
+      right: clip.right === false ? chart.width : area3.right + (clip.right === true ? 0 : clip.right),
+      top: clip.top === false ? 0 : area3.top - (clip.top === true ? 0 : clip.top),
+      bottom: clip.bottom === false ? chart.height : area3.bottom + (clip.bottom === true ? 0 : clip.bottom)
     };
   }
 
@@ -6299,14 +6384,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const chart = this.chart;
       const meta = this._cachedMeta;
       const elements2 = meta.data || [];
-      const area2 = chart.chartArea;
+      const area3 = chart.chartArea;
       const active = [];
       const start = this._drawStart || 0;
       const count = this._drawCount || elements2.length - start;
       const drawActiveElementsOnTop = this.options.drawActiveElementsOnTop;
       let i;
       if (meta.dataset) {
-        meta.dataset.draw(ctx, area2, start, count);
+        meta.dataset.draw(ctx, area3, start, count);
       }
       for (i = start; i < start + count; ++i) {
         const element = elements2[i];
@@ -6316,11 +6401,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         if (element.active && drawActiveElementsOnTop) {
           active.push(element);
         } else {
-          element.draw(ctx, area2);
+          element.draw(ctx, area3);
         }
       }
       for (i = 0; i < active.length; ++i) {
-        active[i].draw(ctx, area2);
+        active[i].draw(ctx, area3);
       }
     }
     getStyle(index2, active) {
@@ -10204,9 +10289,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         return;
       }
       const ctx = this.ctx;
-      const area2 = this._computeLabelArea();
-      if (area2) {
-        clipArea(ctx, area2);
+      const area3 = this._computeLabelArea();
+      if (area3) {
+        clipArea(ctx, area3);
       }
       const items = this.getLabelItems(chartArea);
       for (const item of items) {
@@ -10216,7 +10301,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         const y = item.textOffset;
         renderText(ctx, label, 0, y, tickFont, renderTextOptions);
       }
-      if (area2) {
+      if (area3) {
         unclipArea(ctx);
       }
     }
@@ -11397,8 +11482,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         return;
       }
       layouts.update(this, this.width, this.height, minPadding);
-      const area2 = this.chartArea;
-      const noArea = area2.width <= 0 || area2.height <= 0;
+      const area3 = this.chartArea;
+      const noArea = area3.width <= 0 || area3.height <= 0;
       this._layers = [];
       each(this.boxes, (box) => {
         if (noArea && box.position === "chartArea") {
@@ -12548,9 +12633,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const borderWidth = radius && options.borderWidth || 0;
       return (radius + borderWidth) * 2;
     }
-    draw(ctx, area2) {
+    draw(ctx, area3) {
       const options = this.options;
-      if (this.skip || options.radius < 0.1 || !_isPointInArea(this, area2, this.size(options) / 2)) {
+      if (this.skip || options.radius < 0.1 || !_isPointInArea(this, area3, this.size(options) / 2)) {
         return;
       }
       ctx.strokeStyle = options.borderColor;
@@ -12840,7 +12925,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     let sampledIndex = 0;
     const endIndex = start + count - 1;
     let a = start;
-    let i, maxAreaPoint, maxArea, area2, nextA;
+    let i, maxAreaPoint, maxArea, area3, nextA;
     decimated[sampledIndex++] = data[a];
     for (i = 0; i < samples - 2; i++) {
       let avgX = 0;
@@ -12858,11 +12943,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const rangeOffs = Math.floor(i * bucketWidth) + 1 + start;
       const rangeTo = Math.min(Math.floor((i + 1) * bucketWidth) + 1, count) + start;
       const { x: pointAx, y: pointAy } = data[a];
-      maxArea = area2 = -1;
+      maxArea = area3 = -1;
       for (j = rangeOffs; j < rangeTo; j++) {
-        area2 = 0.5 * Math.abs((pointAx - avgX) * (data[j].y - pointAy) - (pointAx - data[j].x) * (avgY - pointAy));
-        if (area2 > maxArea) {
-          maxArea = area2;
+        area3 = 0.5 * Math.abs((pointAx - avgX) * (data[j].y - pointAy) - (pointAx - data[j].x) * (avgY - pointAy));
+        if (area3 > maxArea) {
+          maxArea = area3;
           maxAreaPoint = data[j];
           nextA = j;
         }
@@ -13412,7 +13497,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     }
     return target;
   }
-  function _drawfill(ctx, source, area2) {
+  function _drawfill(ctx, source, area3) {
     const target = _getTarget(source);
     const { chart, index: index2, line, scale, axis } = source;
     const lineOpts = line.options;
@@ -13422,13 +13507,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const meta = chart.getDatasetMeta(index2);
     const clip = getDatasetClipArea(chart, meta);
     if (target && line.points.length) {
-      clipArea(ctx, clipToIndexBounds(area2, meta.iScale));
+      clipArea(ctx, clipToIndexBounds(area3, meta.iScale));
       doFill(ctx, {
         line,
         target,
         above,
         below,
-        area: area2,
+        area: area3,
         scale,
         axis,
         clip
@@ -13436,32 +13521,32 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       unclipArea(ctx);
     }
   }
-  function clipToIndexBounds(area2, iScale) {
+  function clipToIndexBounds(area3, iScale) {
     if (!iScale || iScale.getPointPositionForValue) {
-      return area2;
+      return area3;
     }
     const p1 = iScale.getPixelForValue(iScale.min);
     const p2 = iScale.getPixelForValue(iScale.max);
     const lo = Math.min(p1, p2);
     const hi = Math.max(p1, p2);
     return iScale.isHorizontal() ? {
-      ...area2,
-      left: Math.max(area2.left, lo),
-      right: Math.min(area2.right, hi)
+      ...area3,
+      left: Math.max(area3.left, lo),
+      right: Math.min(area3.right, hi)
     } : {
-      ...area2,
-      top: Math.max(area2.top, lo),
-      bottom: Math.min(area2.bottom, hi)
+      ...area3,
+      top: Math.max(area3.top, lo),
+      bottom: Math.min(area3.bottom, hi)
     };
   }
   function doFill(ctx, cfg) {
-    const { line, target, above, below, area: area2, scale, clip } = cfg;
+    const { line, target, above, below, area: area3, scale, clip } = cfg;
     const property = line._loop ? "angle" : cfg.axis;
     ctx.save();
     let fillColor = below;
     if (below !== above) {
       if (property === "x") {
-        clipVertical(ctx, target, area2.top);
+        clipVertical(ctx, target, area3.top);
         fill(ctx, {
           line,
           target,
@@ -13472,9 +13557,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         });
         ctx.restore();
         ctx.save();
-        clipVertical(ctx, target, area2.bottom);
+        clipVertical(ctx, target, area3.bottom);
       } else if (property === "y") {
-        clipHorizontal(ctx, target, area2.left);
+        clipHorizontal(ctx, target, area3.left);
         fill(ctx, {
           line,
           target,
@@ -13485,7 +13570,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         });
         ctx.restore();
         ctx.save();
-        clipHorizontal(ctx, target, area2.right);
+        clipHorizontal(ctx, target, area3.right);
         fillColor = above;
       }
     }
@@ -13657,15 +13742,15 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     beforeDraw(chart, _args, options) {
       const draw2 = options.drawTime === "beforeDraw";
       const metasets = chart.getSortedVisibleDatasetMetas();
-      const area2 = chart.chartArea;
+      const area3 = chart.chartArea;
       for (let i = metasets.length - 1; i >= 0; --i) {
         const source = metasets[i].$filler;
         if (!source) {
           continue;
         }
-        source.line.updateControlPoints(area2, source.axis);
+        source.line.updateControlPoints(area3, source.axis);
         if (draw2 && source.fill) {
-          _drawfill(chart.ctx, source, area2);
+          _drawfill(chart.ctx, source, area3);
         }
       }
     },
@@ -16054,24 +16139,24 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       bottom: y + size.h
     };
   }
-  function isNotOverlapped(item, area2) {
-    if (!area2) {
+  function isNotOverlapped(item, area3) {
+    if (!area3) {
       return true;
     }
     const { left, top, right, bottom } = item;
     const apexesInArea = _isPointInArea({
       x: left,
       y: top
-    }, area2) || _isPointInArea({
+    }, area3) || _isPointInArea({
       x: left,
       y: bottom
-    }, area2) || _isPointInArea({
+    }, area3) || _isPointInArea({
       x: right,
       y: top
-    }, area2) || _isPointInArea({
+    }, area3) || _isPointInArea({
       x: right,
       y: bottom
-    }, area2);
+    }, area3);
     return !apexesInArea;
   }
   function buildPointLabelItems(scale, labelSizes, padding) {
@@ -16083,16 +16168,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       extra: getTickBackdropHeight(opts) / 2,
       additionalAngle: centerPointLabels ? PI / valueCount : 0
     };
-    let area2;
+    let area3;
     for (let i = 0; i < valueCount; i++) {
       itemOpts.padding = padding[i];
       itemOpts.size = labelSizes[i];
       const item = createPointLabelItem(scale, i, itemOpts);
       items.push(item);
       if (display === "auto") {
-        item.visible = isNotOverlapped(item, area2);
+        item.visible = isNotOverlapped(item, area3);
         if (item.visible) {
-          area2 = item;
+          area3 = item;
         }
       }
     }
@@ -17039,7 +17124,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const windowMs = timeframe === "24h" ? 864e5 : timeframe === "7d" ? 7 * 864e5 : 30 * 864e5;
     return timestamp >= now - windowMs;
   }
-  function getTeamOptions(records) {
+  function getTeamOptions(records, nameFor) {
     const teams = /* @__PURE__ */ new Map();
     for (const record of records) {
       if (!record.isTeamDuel || !record.teamKey) continue;
@@ -17056,7 +17141,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       (left, right) => right.count - left.count || left.label.localeCompare(right.label)
     );
   }
-  function getChartData(records, filters, now = Date.now()) {
+  function getChartData(records, filters, now = Date.now(), nameFor = (_id, fallback) => fallback || "#unknown") {
     const points = [];
     const queue = filters.queue || "solo";
     for (const record of records) {
@@ -17077,7 +17162,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (value === null || !Number.isFinite(value)) continue;
       const date = new Date(record.time);
       if (Number.isNaN(date.getTime())) continue;
-      const teammates = (record.teammateNicks || []).join(" & ");
+      const teammateIds = record.teammateIds || [];
+      const teammateNicks = record.teammateNicks || [];
+      const teammateLabel = teammateIds.length ? teammateIds.map((playerId, index2) => nameFor(playerId, teammateNicks[index2])).join(" & ") : teammateNicks.filter(Boolean).join(" & ");
       points.push({
         time: record.time,
         label: pointLabel(date, filters.timeframe),
@@ -17085,12 +17172,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         dailyKey: dayKey(date),
         monthlyKey: monthKey(date),
         value,
-        opponent: record.opponent || "Unknown Opponent",
+        opponent: nameFor(record.opponentId, record.opponent),
         mode: record.mode,
         gameId: record.gameId,
         isTeamDuel: record.isTeamDuel,
         teamKey: record.teamKey,
-        teamLabel: teammates ? `You + ${teammates}` : void 0
+        teamLabel: teammateLabel ? `You + ${teammateLabel}` : void 0
       });
     }
     return points.sort(
@@ -17205,7 +17292,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     }
   ];
   var STYLES2 = `
-#bgh-history-graph { border: 0; padding: 0; background: transparent; color: #fff; max-width: none; max-height: none; }
+#bgh-history-graph { border: 0; padding: 0; background: transparent; color: #fff; max-width: none; max-height: none; color-scheme: dark; }
 #bgh-history-graph::backdrop { background: rgba(10,10,20,.74); backdrop-filter: blur(12px); }
 #bgh-graph-shell { width: min(1300px, 94vw); max-height: 92vh; display: flex; flex-direction: column; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.15); border-radius: 24px; background: rgba(26,26,46,.98); box-shadow: 0 40px 150px rgba(0,0,0,.6); overflow: auto; font-family: var(--font-neo-sans, sans-serif); }
 #bgh-graph-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
@@ -17217,7 +17304,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
 .bgh-graph-filter.bgh-active { background: #7952e9; color: #fff; }
 .bgh-graph-filter:focus-visible, #bgh-graph-close:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-team { align-items: center; gap: 8px; padding-left: 10px; color: #999; font-size: 10px; font-weight: 800; }
-.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 11px; }
+.bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background-color: #1a1a2d; color: #f7f5ff; font: inherit; font-size: 11px; color-scheme: dark; }
+.bgh-graph-select option { background-color: #1a1a2d; color: #f7f5ff; }
 .bgh-graph-select:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-chart { position: relative; flex: 1; min-height: 420px; }
 .bgh-graph-empty { min-height: 420px; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
@@ -17234,7 +17322,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       (value) => typeof value === "number" && Number.isFinite(value)
     );
   }
-  function createGraphView() {
+  function createGraphView(options) {
     const style = injectStyle(STYLE_ID3, STYLES2);
     let dialog = null;
     let chart = null;
@@ -17266,7 +17354,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (!dialog) return;
       chart?.destroy();
       chart = null;
-      const teamOptions = getTeamOptions(records);
+      const teamOptions = getTeamOptions(records, options.nameFor);
       if (filters.queue === "team") {
         if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
           filters.teamKey = teamOptions[0]?.key || "";
@@ -17274,7 +17362,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       } else {
         filters.teamKey = "";
       }
-      const chartData = getChartData(records, filters);
+      const chartData = getChartData(records, filters, Date.now(), options.nameFor);
       const shell = dialog.querySelector("#bgh-graph-shell");
       if (!shell) return;
       const title = shell.querySelector("#bgh-graph-title");
@@ -17441,7 +17529,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         maximum = Math.max(maximum, 0.5);
       }
       const padding = maximum - minimum === 0 ? 5 : (maximum - minimum) * 0.1;
-      const options = {
+      const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { intersect: false, mode: "index" },
@@ -17839,6 +17927,97 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     }
   }
 
+  // src/names.ts
+  var KEY5 = "gg.better-game-history.players";
+  var VERSION = 1;
+  var MAX_ENTRIES = 2e3;
+  function validNick(playerId, nick) {
+    return typeof nick === "string" && nick.trim().length > 0 && nick !== "undefined" && (!playerId || nick !== playerId);
+  }
+  function sanitize(value) {
+    if (!value || typeof value !== "object") return {};
+    const result = {};
+    for (const [playerId, entry] of Object.entries(value)) {
+      if (!playerId || !entry || typeof entry !== "object") continue;
+      const source = entry;
+      if (!validNick(playerId, source.nick)) continue;
+      result[playerId] = {
+        nick: source.nick,
+        updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    return result;
+  }
+  function trim(names2) {
+    const entries = Object.entries(names2);
+    if (entries.length <= MAX_ENTRIES) return names2;
+    entries.sort(
+      (left, right) => new Date(right[1].updatedAt).getTime() - new Date(left[1].updatedAt).getTime()
+    );
+    return Object.fromEntries(entries.slice(0, MAX_ENTRIES));
+  }
+  function createNameStore() {
+    const store = createJsonStore({ key: KEY5, version: VERSION });
+    let names2 = sanitize(store.get());
+    let revision = 0;
+    const listeners = /* @__PURE__ */ new Set();
+    const notify = () => {
+      revision++;
+      for (const listener of [...listeners]) {
+        try {
+          listener();
+        } catch (error) {
+          console.warn("[better-game-history] name listener failed", error);
+        }
+      }
+    };
+    const persist = () => {
+      store.set(names2);
+    };
+    const shortId = (playerId) => {
+      if (!playerId) return "#unknown";
+      return `#${playerId.slice(-6)}`;
+    };
+    const record = (playerId, nick) => {
+      if (!playerId || !validNick(playerId, nick)) return;
+      const existing = names2[playerId];
+      if (existing?.nick === nick) return;
+      names2 = {
+        ...names2,
+        [playerId]: { nick, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
+      };
+      names2 = trim(names2);
+      persist();
+      notify();
+    };
+    const captureVisitedProfile = () => {
+      if (!location.pathname.startsWith("/user/")) return;
+      const data = nextData();
+      const user = data?.props?.pageProps?.userProfile?.user;
+      record(user?.userId, user?.nick);
+    };
+    return {
+      get revision() {
+        return revision;
+      },
+      captureVisitedProfile,
+      record,
+      shortId,
+      nameFor(playerId, fallback) {
+        if (validNick(playerId, fallback)) return fallback;
+        if (playerId && names2[playerId]) return names2[playerId].nick;
+        return shortId(playerId);
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      dispose() {
+        listeners.clear();
+      }
+    };
+  }
+
   // src/main.ts
   var config = betterGameHistoryConfig;
   var OLD_KEYS = [
@@ -17895,8 +18074,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     },
     setup(context) {
       const repository = createHistoryRepository();
-      const graph = createGraphView();
+      const names2 = createNameStore();
+      const graph = createGraphView({ nameFor: names2.nameFor });
       const drawer = createDrawerView({
+        nameFor: names2.nameFor,
         onGraph: () => openGraph(),
         onOpenGame: (record) => {
           pageWindow().open(
@@ -17917,6 +18098,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       let renderScheduled = false;
       let renderFrame = null;
       const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
+      function recordNames(details) {
+        details.teamPlayerIds?.forEach((playerId, index2) => {
+          names2.record(playerId, details.teamPlayerNicks?.[index2]);
+        });
+        if (details.opponentId && details.opponent && !details.opponent.includes(" & ")) {
+          names2.record(details.opponentId, details.opponent);
+        }
+      }
       function stopWork() {
         workGeneration++;
         workAbort?.abort();
@@ -17971,6 +18160,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
               const attempts = record.hydration.attempts + 1;
               const now = (/* @__PURE__ */ new Date()).toISOString();
               if (result.status === "ok") {
+                recordNames(result.details);
                 repository.merge(
                   {
                     ...record,
@@ -18127,12 +18317,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
           source: "websocket"
         };
+        recordNames(record);
         repository.merge(record, limit());
         scheduleRender();
         startHydration();
       });
       context.onCleanup(offWs);
       const offDom = onDomChange(() => {
+        names2.captureVisitedProfile();
         if (!userId) void refreshAccount(false, 1500);
       });
       context.onCleanup(offDom);
@@ -18141,6 +18333,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         scheduleRender();
       });
       context.onCleanup(offHistory);
+      const offNames = names2.subscribe(() => {
+        historyRevision++;
+        scheduleRender();
+        graph.refresh(records());
+      });
+      context.onCleanup(offNames);
       const offConfig = context.config.subscribe((change) => {
         if (change.key === "enabled") {
           if (change.value) {
@@ -18167,6 +18365,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       context.onCleanup(() => pageWindow().removeEventListener("keydown", onKeydown));
       context.onPageHide(() => repository.flush());
       context.onRoute(() => {
+        names2.captureVisitedProfile();
         scheduleRender();
         if (isInGame()) stopWork();
         else if (!workAbort && userId && config.get("enabled")) startWork();
@@ -18180,12 +18379,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           else clearTimeout(renderFrame);
           renderFrame = null;
         }
+        names2.dispose();
         graph.dispose();
         drawer.dispose();
         repository.dispose();
       });
       void waitForBody().then(() => {
         if (disposed) return;
+        names2.captureVisitedProfile();
         scheduleRender();
         void refreshAccount(true, 15e3);
       }).catch((error) => context.log("waitForBody failed", error));

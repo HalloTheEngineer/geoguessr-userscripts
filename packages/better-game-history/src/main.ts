@@ -17,6 +17,7 @@ import { formatModeName, sleep, toFiniteNumber } from "./format.js";
 import { createGraphView } from "./graph-view.js";
 import { createHistoryRepository } from "./history-store.js";
 import { hydrateGameDetails } from "./hydration.js";
+import { createNameStore } from "./names.js";
 import type { GameRecord, GraphFilters } from "./types.js";
 
 declare const __BGH_VERSION__: string;
@@ -118,8 +119,10 @@ startUserscript({
   },
   setup(context) {
     const repository = createHistoryRepository();
-    const graph = createGraphView();
+    const names = createNameStore();
+    const graph = createGraphView({ nameFor: names.nameFor });
     const drawer = createDrawerView({
+      nameFor: names.nameFor,
       onGraph: () => openGraph(),
       onOpenGame: (record) => {
         pageWindow().open(
@@ -142,6 +145,20 @@ startUserscript({
     let renderFrame: number | null = null;
 
     const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
+
+    function recordNames(details: {
+      opponentId?: string;
+      opponent?: string;
+      teamPlayerIds?: string[];
+      teamPlayerNicks?: string[];
+    }): void {
+      details.teamPlayerIds?.forEach((playerId, index) => {
+        names.record(playerId, details.teamPlayerNicks?.[index]);
+      });
+      if (details.opponentId && details.opponent && !details.opponent.includes(" & ")) {
+        names.record(details.opponentId, details.opponent);
+      }
+    }
 
     function stopWork(): void {
       workGeneration++;
@@ -202,6 +219,7 @@ startUserscript({
             const attempts = record.hydration.attempts + 1;
             const now = new Date().toISOString();
             if (result.status === "ok") {
+              recordNames(result.details);
               repository.merge(
                 {
                   ...record,
@@ -387,6 +405,7 @@ startUserscript({
         updatedAt: new Date().toISOString(),
         source: "websocket",
       };
+      recordNames(record);
       repository.merge(record, limit());
       scheduleRender();
       startHydration();
@@ -394,6 +413,7 @@ startUserscript({
     context.onCleanup(offWs);
 
     const offDom = onDomChange(() => {
+      names.captureVisitedProfile();
       if (!userId) void refreshAccount(false, 1500);
     });
     context.onCleanup(offDom);
@@ -403,6 +423,13 @@ startUserscript({
       scheduleRender();
     });
     context.onCleanup(offHistory);
+
+    const offNames = names.subscribe(() => {
+      historyRevision++;
+      scheduleRender();
+      graph.refresh(records());
+    });
+    context.onCleanup(offNames);
 
     const offConfig = context.config.subscribe((change) => {
       if (change.key === "enabled") {
@@ -433,6 +460,7 @@ startUserscript({
     context.onPageHide(() => repository.flush());
 
     context.onRoute(() => {
+      names.captureVisitedProfile();
       scheduleRender();
       if (isInGame()) stopWork();
       else if (!workAbort && userId && config.get("enabled")) startWork();
@@ -446,6 +474,7 @@ startUserscript({
         else clearTimeout(renderFrame);
         renderFrame = null;
       }
+      names.dispose();
       graph.dispose();
       drawer.dispose();
       repository.dispose();
@@ -454,6 +483,7 @@ startUserscript({
     void waitForBody()
       .then(() => {
         if (disposed) return;
+        names.captureVisitedProfile();
         scheduleRender();
         void refreshAccount(true, 15_000);
       })

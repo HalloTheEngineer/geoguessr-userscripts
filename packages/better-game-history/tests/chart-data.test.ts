@@ -133,7 +133,7 @@ test("team graph filters by team composition and uses team rating", () => {
   assert.equal(filtered[0]?.value, 1500);
   assert.equal(filtered[0]?.teamLabel, "You + Alice");
   assert.deepEqual(
-    getTeamOptions(records).map((team) => team.label),
+    getTeamOptions(records, (_id, fallback) => fallback || "Unknown").map((team) => team.label),
     ["You + Alice", "You + Bob"],
   );
 });
