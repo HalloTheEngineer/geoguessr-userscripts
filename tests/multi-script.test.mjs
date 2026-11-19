@@ -54,6 +54,13 @@ test("multiple userscripts share one runtime host and settings tab", async () =>
       "geosurfer",
       "match-notifier",
     ]);
+    for (const [id, registration] of host.registrations) {
+      assert.equal(registration.sections[0]?.id, "general", `${id} is missing General first`);
+      assert.ok(
+        registration.sections[0]?.fields?.includes("enabled"),
+        `${id} is missing an enabled toggle in General`,
+      );
+    }
     assert.equal(dom.document.querySelectorAll("#ggk-userscripts-tab").length, 1);
     assert.equal(dom.document.querySelectorAll(".ggk-subTab").length, 5);
     const panel = dom.document.getElementById("ggk-userscripts-panel");

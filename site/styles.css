@@ -9,6 +9,15 @@
   --lineStrong: #b9b9b1;
   --accent: #5b3df5;
   --accentText: #ffffff;
+  --actionInstallBg: #111111;
+  --actionInstallText: #ffffff;
+  --actionInstallHover: #333333;
+  --actionUpdateBg: #5b3df5;
+  --actionUpdateText: #ffffff;
+  --actionUpdateHover: #482bd0;
+  --actionInstalledBg: #ecece7;
+  --actionInstalledText: #66665f;
+  --actionInstalledBorder: #d5d5cc;
   --max: 1180px;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
@@ -115,31 +124,31 @@ h1 {
   border-color: var(--text);
 }
 .buttonPrimary {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--surface);
+  border-color: var(--actionInstallBg);
+  background: var(--actionInstallBg);
+  color: var(--actionInstallText);
 }
 .buttonPrimary:hover {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--actionInstallHover);
+  border-color: var(--actionInstallHover);
 }
 .buttonInstalled {
-  background: transparent;
-  border-color: var(--line);
-  color: var(--faint);
+  border-color: var(--actionInstalledBorder);
+  background: var(--actionInstalledBg);
+  color: var(--actionInstalledText);
   cursor: default;
 }
 .buttonInstalled:hover {
-  border-color: var(--line);
+  border-color: var(--actionInstalledBorder);
 }
 .buttonUpdate {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accentText);
+  border-color: var(--actionUpdateBg);
+  background: var(--actionUpdateBg);
+  color: var(--actionUpdateText);
 }
 .buttonUpdate:hover {
-  background: #482bd0;
-  border-color: #482bd0;
+  background: var(--actionUpdateHover);
+  border-color: var(--actionUpdateHover);
 }
 .heroFacts {
   display: flex;

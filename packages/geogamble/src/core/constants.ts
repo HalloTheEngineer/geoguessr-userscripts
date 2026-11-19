@@ -261,6 +261,7 @@ export const CASE_HINT_TYPES = [
 ];
 
 export const CONFIG = {
+  enabled: true,
   enabledCountries: "all",
   excludeCountries: [],
   animationMs: 2800,

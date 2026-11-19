@@ -5,6 +5,7 @@ import { CONFIG_DEFAULTS } from "./core/constants.js";
 export type CountrySelection = "all" | string[];
 
 export interface GeogambleConfig {
+  enabled: boolean;
   enabledCountries: CountrySelection;
   excludeCountries: string[];
   animationMs: number;
@@ -49,6 +50,13 @@ export const geogambleConfig = defineConfig<GeogambleConfig>({
   version: 1,
   write: "diff",
   fields: {
+    enabled: {
+      type: "boolean",
+      default: true,
+      label: "Enabled",
+      section: "general",
+      order: 0,
+    },
     enabledCountries: {
       type: "custom",
       control: "country-list",

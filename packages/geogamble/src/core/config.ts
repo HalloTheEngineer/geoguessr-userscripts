@@ -47,6 +47,7 @@ export function resolveConfig(config: any = CONFIG, data: any = COUNTRY_DATA) {
     ? config.activationKey
     : "none";
   const settings = {
+    enabled: config.enabled !== false,
     enabledCountries: config.enabledCountries ?? "all",
     excludeCountries: Array.isArray(config.excludeCountries) ? config.excludeCountries : [],
     animationMs,

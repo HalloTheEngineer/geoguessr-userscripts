@@ -92,7 +92,13 @@ import {
     Object.assign(settings, next.settings);
     index = next.index;
     applyPerfTweaks();
-    if (structuralChange) detachAllMaps("config changed");
+    if (!settings.enabled) {
+      cancelActiveGambles("disabled");
+      detachAllMaps("disabled");
+      hideCaseFeature();
+    } else if (structuralChange) {
+      detachAllMaps("config changed");
+    }
     syncHeatmapOverlays();
     if (masterGain && audioContext) masterGain.gain.value = settings.volume;
     return structuralChange;
@@ -110,7 +116,10 @@ import {
   geogambleConfig.subscribe((change) => {
     const before = jsonOf(settings, ["enabledCountries", "excludeCountries", "allowOtherModes"]);
     CONFIG[change.key] = change.value;
-    if (!applyingFromStore) applyResolved(before);
+    if (!applyingFromStore) {
+      applyResolved(before);
+      if (change.key === "enabled" && settings.enabled) scan();
+    }
   });
 
   function applyPerfTweaks() {
@@ -219,6 +228,7 @@ import {
   function installWsHooks() {
     if (wsHookInstalled) return;
     onSendMessage((data, socket) => {
+      if (!settings.enabled) return;
       try {
         observeDuelSend(socket, data);
       } catch (error) {
@@ -226,6 +236,7 @@ import {
       }
     });
     onJsonMessage((data) => {
+      if (!settings.enabled) return;
       try {
         onDuelMessage({ data: JSON.stringify(data) });
       } catch (error) {
@@ -258,6 +269,7 @@ import {
   }
 
   function sendDuelPin(point) {
+    if (!settings.enabled) return false;
     const bridge = duelBridge;
     if (!bridge?.confirmedDuel || !point) return false;
     if (bridge.socket?.readyState !== 1) return false;
@@ -472,6 +484,10 @@ import {
   }
 
   function syncCaseFeature() {
+    if (!settings.enabled) {
+      hideCaseFeature();
+      return;
+    }
     if (location.pathname !== casePagePath) {
       saveCaseRound();
       casePagePath = location.pathname;
@@ -1138,6 +1154,7 @@ button.gg-case-hintMain:hover { background:rgba(255,255,255,.055); }
   }
 
   function openCaseDialog() {
+    if (!settings.enabled) return;
     if (!caseLocation) return;
     if (
       !caseModeAllowed({ pathname: casePagePath, isRated: caseLocation.isRated, hasLocation: true })
@@ -3328,6 +3345,12 @@ button.gg-case-hintMain:hover { background:rgba(255,255,255,.055); }
   }
 
   function scan() {
+    if (!settings.enabled) {
+      cancelActiveGambles("disabled");
+      detachAllMaps("disabled");
+      hideCaseFeature();
+      return;
+    }
     syncCaseFeature();
     installStaticHook();
     installPanoHook();
@@ -3426,6 +3449,7 @@ button.gg-case-hintMain:hover { background:rgba(255,255,255,.055); }
       order: 15,
       config: geogambleConfig,
       sections: [
+        { id: "general", title: "General", fields: ["enabled"] },
         { id: "gamble", title: "Gamble", fields: ["animationMs", "centerBias", "activationKey"] },
         { id: "countries", title: "Countries", fields: ["enabledCountries", "excludeCountries"] },
         {

@@ -45,6 +45,7 @@ test("test loader exposes the userscript API without a browser", () => {
 
 test("default configuration matches the documented contract", () => {
   assert.deepEqual(CONFIG, {
+    enabled: true,
     enabledCountries: "all",
     excludeCountries: [],
     animationMs: 2800,

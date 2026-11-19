@@ -32,6 +32,7 @@ test("GitHub Pages site contains every script and install link", async () => {
   assert.match(html, /data-install-button/);
   assert.match(html, /installStatusNote/);
   assert.doesNotMatch(html, /undefined\/tree/);
+  assert.doesNotMatch(html, /style="--accent/);
   assert.match(html, /<h1>GeoGuessr Toolkit<\/h1>/);
   assert.doesNotMatch(html, /class="brand"/);
   assert.equal((html.match(/class="scriptRow"/g) || []).length, 5);

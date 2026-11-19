@@ -40,7 +40,7 @@ function row(config, repo, artifactVersion, index, previews) {
     .join("");
   const version = artifactVersion || config.packageJson.version;
   return `${legacyAnchors}
-    <article class="scriptRow" id="${escapeHtml(site.anchor || config.name)}" data-script="${escapeHtml(config.name)}" data-script-version="${escapeHtml(version)}" style="--accent: ${escapeHtml(site.accent || "#5b3df5")}">
+    <article class="scriptRow" id="${escapeHtml(site.anchor || config.name)}" data-script="${escapeHtml(config.name)}" data-script-version="${escapeHtml(version)}">
       <div class="scriptIndex">${String(index + 1).padStart(2, "0")}</div>
       <div class="scriptInfo">
         <h3>${escapeHtml(title)}</h3>
