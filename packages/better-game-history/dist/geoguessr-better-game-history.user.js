@@ -17343,15 +17343,17 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
 .bgh-graph-group { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: rgba(255,255,255,.07); }
 .bgh-graph-filter { border: 0; border-radius: 7px; padding: 7px 11px; background: transparent; color: #999; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .bgh-graph-filter.bgh-active { background: #7952e9; color: #fff; }
+.bgh-graph-filter:disabled { opacity: .35; cursor: not-allowed; }
 .bgh-graph-filter:focus-visible, #bgh-graph-close:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
 .bgh-graph-team { align-items: center; gap: 8px; padding-left: 10px; color: #999; font-size: 10px; font-weight: 800; }
 .bgh-graph-select { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 10px; background-color: #1a1a2d; color: #f7f5ff; font: inherit; font-size: 11px; color-scheme: dark; }
 .bgh-graph-select option { background-color: #1a1a2d; color: #f7f5ff; }
 .bgh-graph-select:focus-visible { outline: 2px solid #bca7ff; outline-offset: 2px; }
-.bgh-graph-chart { position: relative; flex: 1; min-height: 420px; }
-.bgh-graph-empty { min-height: 420px; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
+.bgh-graph-chart { position: relative; flex: 0 0 auto; height: clamp(320px, 52vh, 540px); min-height: 0; }
+.bgh-graph-empty { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.6); text-align: center; }
+.bgh-graph-empty[hidden] { display: none; }
 .bgh-graph-note { color: rgba(255,255,255,.5); font-size: 11px; }
-@media (max-width: 700px) { #bgh-graph-shell { padding: 18px; } .bgh-graph-chart, .bgh-graph-empty { min-height: 300px; } }
+@media (max-width: 700px) { #bgh-graph-shell { padding: 18px; } .bgh-graph-chart { height: 300px; } }
 `;
   function filterGroup(key, values, current) {
     return `<div class="bgh-graph-group">${values.map(
@@ -17448,6 +17450,15 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           String(filters[group.key] ?? "")
         )
       ).join("") + teamSelect + `<div class="bgh-graph-group"><button class="bgh-graph-filter ${filters.showTrend ? "bgh-active" : ""}" type="button" data-trend="1">Trend</button></div>`;
+      if (filters.metric === "gameCount") {
+        const pointsButton = toolbar.querySelector(
+          '[data-filter="candleMode"][data-value="none"]'
+        );
+        if (pointsButton) {
+          pointsButton.disabled = true;
+          pointsButton.title = "Counts use a time bucket.";
+        }
+      }
       toolbar.querySelector("#bgh-team-select")?.addEventListener("change", (event) => {
         filters.teamKey = event.currentTarget.value;
         render();
@@ -17466,13 +17477,18 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
             filters.queue = value;
             filters.teamKey = "";
           }
-          if (key === "metric") filters.metric = value;
+          if (key === "metric") {
+            filters.metric = value;
+            if (filters.metric === "gameCount" && filters.candleMode === "none") {
+              filters.candleMode = "daily";
+            }
+          }
           if (key === "typeFilter") filters.typeFilter = value;
           if (key === "modeFilter") filters.modeFilter = value;
           if (key === "timeframe") filters.timeframe = value;
-          if (key === "candleMode") filters.candleMode = value;
-          if (filters.metric === "gameCount" && filters.candleMode === "none") {
-            filters.candleMode = "daily";
+          if (key === "candleMode") {
+            if (value === "none" && filters.metric === "gameCount") return;
+            filters.candleMode = value;
           }
           render();
         });

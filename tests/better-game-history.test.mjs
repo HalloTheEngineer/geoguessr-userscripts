@@ -115,4 +115,12 @@ test("Better Game History mounts account-scoped history and graph access", async
   const teamSelect = dom.document.getElementById("bgh-team-select");
   assert.ok(teamSelect);
   assert.match(teamSelect.textContent || "", /You \+ Mate/);
+
+  const countButton = dom.document.querySelector('[data-filter="metric"][data-value="gameCount"]');
+  assert.ok(countButton);
+  countButton.click();
+  const pointsButton = dom.document.querySelector('[data-filter="candleMode"][data-value="none"]');
+  assert.ok(pointsButton);
+  assert.equal(pointsButton.disabled, true);
+  assert.equal(dom.document.querySelector(".bgh-graph-empty")?.hidden, true);
 });
