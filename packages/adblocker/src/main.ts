@@ -1,5 +1,6 @@
 import { injectStyle, isTopFrame, startUserscript } from "gg-kit";
 import networkRules from "../network-rules.json";
+import { waitForAppReady } from "./app-ready.js";
 import { adblockerConfig } from "./config.js";
 import type { Category } from "./rules.js";
 import {
@@ -98,7 +99,7 @@ function syncCss(): void {
 }
 
 function scanAndRemoveScripts(node: ParentNode | null): void {
-  if (!node || !categoryEnabled("ads")) return;
+  if (!appReady || !node || !categoryEnabled("ads")) return;
   const element = node as Element;
   if (
     (element.tagName === "SCRIPT" || element.tagName === "IFRAME") &&
@@ -130,6 +131,13 @@ function scheduleBlock(): void {
 }
 
 function blockElements(): void {
+  if (!appReady) {
+    if (!adblockerConfig.get("enabled")) {
+      document.getElementById("ggb-insert-links")?.remove();
+    }
+    syncCss();
+    return;
+  }
   if (!adblockerConfig.get("enabled")) {
     document.getElementById("ggb-insert-links")?.remove();
     syncCss();
@@ -185,6 +193,8 @@ function blockElements(): void {
   if (count) log("elements handled", count);
 }
 
+let appReady = false;
+
 startUserscript({
   name: "adblocker",
   version: __ADBLOCKER_VERSION__,
@@ -211,7 +221,7 @@ startUserscript({
     : null,
   setup(context) {
     const observer = new MutationObserver((mutations) => {
-      if (!adblockerConfig.get("enabled")) return;
+      if (!appReady || !adblockerConfig.get("enabled")) return;
       let changed = false;
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
@@ -226,6 +236,9 @@ startUserscript({
 
     let observing = false;
     let retry: ReturnType<typeof setTimeout> | null = null;
+    let routeTimer: ReturnType<typeof setTimeout> | null = null;
+    let readyController: AbortController | null = null;
+
     const stopObserver = () => {
       if (retry) {
         clearTimeout(retry);
@@ -235,7 +248,7 @@ startUserscript({
       observing = false;
     };
     const startObserver = () => {
-      if (observing || retry || !adblockerConfig.get("enabled")) return;
+      if (!appReady || observing || retry || !adblockerConfig.get("enabled")) return;
       const root = document.documentElement;
       if (!root) {
         retry = setTimeout(() => {
@@ -248,39 +261,72 @@ startUserscript({
       observing = true;
       context.log("initialized");
     };
+    const runCleanup = () => {
+      if (!appReady || !adblockerConfig.get("enabled")) return;
+      startObserver();
+      blockElements();
+      scanAndRemoveScripts(document.documentElement);
+    };
+    const stopReadyWait = () => {
+      readyController?.abort();
+      readyController = null;
+    };
+    const scheduleReady = () => {
+      if (appReady || readyController || !adblockerConfig.get("enabled")) return;
+      const controller = new AbortController();
+      readyController = controller;
+      void waitForAppReady({ signal: controller.signal })
+        .then(() => {
+          if (controller.signal.aborted || !adblockerConfig.get("enabled")) return;
+          appReady = true;
+          runCleanup();
+        })
+        .catch((error) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            context.log("app readiness wait failed", error);
+          }
+        })
+        .finally(() => {
+          if (readyController === controller) readyController = null;
+        });
+    };
 
     const sync = () => {
-      if (adblockerConfig.get("enabled")) {
-        startObserver();
-        blockElements();
-        scanAndRemoveScripts(document.documentElement);
-      } else {
+      syncCss();
+      if (!adblockerConfig.get("enabled")) {
+        stopReadyWait();
         stopObserver();
         blockElements();
+        return;
       }
+      if (!appReady) {
+        scheduleReady();
+        return;
+      }
+      runCleanup();
     };
     const unsubscribe = adblockerConfig.subscribe(sync);
     context.onCleanup(unsubscribe);
 
-    const onReady = () => {
-      if (!adblockerConfig.get("enabled")) return;
-      blockElements();
-      scanAndRemoveScripts(document.body);
-    };
-    window.addEventListener("DOMContentLoaded", onReady, { once: true });
-
-    startObserver();
-    blockElements();
-    scanAndRemoveScripts(document.documentElement);
+    scheduleReady();
+    syncCss();
 
     context.onRoute(() => {
       if (!adblockerConfig.get("enabled")) return;
-      blockElements();
-      scanAndRemoveScripts(document.documentElement);
+      if (!appReady) {
+        scheduleReady();
+        return;
+      }
+      if (routeTimer) clearTimeout(routeTimer);
+      routeTimer = setTimeout(() => {
+        routeTimer = null;
+        runCleanup();
+      }, 100);
     });
     context.onCleanup(() => {
+      stopReadyWait();
       stopObserver();
-      window.removeEventListener("DOMContentLoaded", onReady);
+      if (routeTimer) clearTimeout(routeTimer);
       document.getElementById("geoguessr-adblocker-style")?.remove();
       document.getElementById("ggb-insert-links")?.remove();
     });

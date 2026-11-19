@@ -10,7 +10,7 @@ export interface BetterGameHistoryConfig {
   enabled: boolean;
   showDrawer: boolean;
   historyLimit: number;
-  feedWindowDays: number;
+  feedTargetGames: number;
   defaultMetric: GraphMetric;
   defaultTimeframe: GraphTimeframe;
   defaultTypeFilter: GraphType;
@@ -42,20 +42,21 @@ export const betterGameHistoryConfig = defineConfig<BetterGameHistoryConfig>({
     historyLimit: {
       type: "number",
       default: 2000,
-      min: 100,
+      min: 200,
       max: 5000,
       step: 100,
       label: "Maximum stored games",
       section: "history",
       order: 10,
     },
-    feedWindowDays: {
+    feedTargetGames: {
       type: "number",
-      default: 30,
-      min: 1,
-      max: 365,
-      step: 1,
-      label: "Feed import window (days)",
+      default: 200,
+      min: 50,
+      max: 5000,
+      step: 50,
+      label: "Games to backfill",
+      hint: "Fetch older games until this many are available or the feed history is exhausted.",
       section: "history",
       order: 11,
     },

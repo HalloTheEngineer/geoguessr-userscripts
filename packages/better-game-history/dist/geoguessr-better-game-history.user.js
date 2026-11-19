@@ -1887,20 +1887,21 @@
       historyLimit: {
         type: "number",
         default: 2e3,
-        min: 100,
+        min: 200,
         max: 5e3,
         step: 100,
         label: "Maximum stored games",
         section: "history",
         order: 10
       },
-      feedWindowDays: {
+      feedTargetGames: {
         type: "number",
-        default: 30,
-        min: 1,
-        max: 365,
-        step: 1,
-        label: "Feed import window (days)",
+        default: 200,
+        min: 50,
+        max: 5e3,
+        step: 50,
+        label: "Games to backfill",
+        hint: "Fetch older games until this many are available or the feed history is exhausted.",
         section: "history",
         order: 11
       },
@@ -2099,6 +2100,20 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   function kindLabel(record) {
     return `${record.isTeamDuel ? "TEAM " : ""}${record.mode}`;
   }
+  function rowSignature(record, active) {
+    return [
+      record.gameId,
+      record.time,
+      record.mode,
+      record.isTeamDuel ? "1" : "0",
+      record.opponent || "",
+      record.opponentId || "",
+      record.win === void 0 ? "" : record.win ? "1" : "0",
+      record.ratingChange === void 0 ? "" : String(record.ratingChange),
+      record.hydration.state,
+      active ? "1" : "0"
+    ].join("|");
+  }
   function rowHtml(record, active) {
     const opponent = record.opponent || "Unknown Opponent";
     const opponentHtml = record.opponentId ? `<a class="bgh-history-opponent" href="/user/${escapeHtml(record.opponentId)}" target="_blank" rel="noopener">${escapeHtml(opponent)}</a>` : `<span class="bgh-history-opponent">${escapeHtml(opponent)}</span>`;
@@ -2181,22 +2196,37 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (!scrollArea) return;
       activeId = activeGameId;
       const scrollTop = scrollArea.scrollTop;
-      scrollArea.replaceChildren();
       if (!records.length) {
-        const empty = document.createElement("div");
-        empty.className = "bgh-history-empty";
-        empty.textContent = "No games recorded yet. Play a duel to start your history.";
-        scrollArea.appendChild(empty);
+        if (!scrollArea.querySelector(".bgh-history-empty")) {
+          const empty = document.createElement("div");
+          empty.className = "bgh-history-empty";
+          empty.textContent = "No games recorded yet. Play a duel to start your history.";
+          scrollArea.replaceChildren(empty);
+        }
         return;
       }
-      const fragment = document.createDocumentFragment();
-      for (const record of records) {
-        const template = document.createElement("template");
-        template.innerHTML = rowHtml(record, record.gameId === activeId);
-        const row = template.content.firstElementChild;
-        if (row) fragment.appendChild(row);
+      const existing = /* @__PURE__ */ new Map();
+      for (const child of scrollArea.querySelectorAll("[data-game-id]")) {
+        if (child.dataset.gameId) existing.set(child.dataset.gameId, child);
       }
-      scrollArea.appendChild(fragment);
+      const rows = [];
+      for (const record of records) {
+        const signature = rowSignature(record, record.gameId === activeId);
+        let row = existing.get(record.gameId);
+        if (!row || row.dataset.signature !== signature) {
+          const template = document.createElement("template");
+          template.innerHTML = rowHtml(record, record.gameId === activeId);
+          const nextRow = template.content.firstElementChild;
+          if (!nextRow) continue;
+          if (row) row.replaceWith(nextRow);
+          nextRow.dataset.signature = signature;
+          row = nextRow;
+        }
+        rows.push(row);
+      }
+      const currentRows = [...scrollArea.children];
+      const sameOrder = currentRows.length === rows.length && currentRows.every((child, index2) => child === rows[index2]);
+      if (!sameOrder) scrollArea.replaceChildren(...rows);
       scrollArea.scrollTop = scrollTop;
     };
     return {
@@ -2221,7 +2251,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
   }
 
   // src/feed-sync.ts
-  var MAX_PAGES = 25;
+  var MAX_PAGES = 100;
   var PAGE_SIZE = 50;
   function parsePayload(value) {
     if (!value) return null;
@@ -2264,15 +2294,15 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     };
   }
   async function syncFeed(options) {
-    const { userId, repository, limit, windowDays, signal, onUpdate } = options;
-    const cutoff = Date.now() - Math.max(1, windowDays) * 864e5;
+    const { userId, repository, limit, targetGames, signal, onUpdate } = options;
+    const target = Math.max(1, Math.min(Math.floor(targetGames), Math.floor(limit)));
     const known = new Set(repository.get(userId, limit).map((record) => record.gameId));
     const seenTokens = /* @__PURE__ */ new Set();
+    const maxPages = Math.min(MAX_PAGES, Math.max(1, Math.ceil(target / PAGE_SIZE) + 10));
     let token = null;
-    let oldest = Number.POSITIVE_INFINITY;
     let added = 0;
     let pages = 0;
-    while (pages < MAX_PAGES) {
+    while (pages < maxPages) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const page = await feedPage(token, PAGE_SIZE);
       pages++;
@@ -2282,8 +2312,6 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       for (const entry of entries) {
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
         const entryTime = typeof entry.time === "string" ? entry.time : void 0;
-        const entryTimestamp = entryTime ? new Date(entryTime).getTime() : Number.NaN;
-        if (Number.isFinite(entryTimestamp)) oldest = Math.min(oldest, entryTimestamp);
         const processPayload = (payload) => {
           if (!payload || !isDuelType(entry.type)) return;
           const record = payloadToRecord(payload, entryTime, userId);
@@ -2300,10 +2328,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         }
       }
       if (pageAdded) onUpdate();
+      if (known.size >= target) break;
       if (!page.paginationToken) break;
       if (seenTokens.has(page.paginationToken)) break;
       seenTokens.add(page.paginationToken);
-      if (oldest <= cutoff) break;
       token = page.paginationToken;
       await sleep2(200, signal);
     }
@@ -17646,7 +17674,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       config,
       sections: [
         { id: "general", title: "General", fields: ["enabled", "showDrawer"] },
-        { id: "history", title: "History", fields: ["historyLimit", "feedWindowDays"] },
+        { id: "history", title: "History", fields: ["historyLimit", "feedTargetGames"] },
         {
           id: "graph",
           title: "Graph defaults",
@@ -17680,6 +17708,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       let workGeneration = 0;
       let workAbort = null;
       let hydrationRunning = false;
+      let historyRevision = 0;
+      let lastRenderSignature = "";
+      let renderScheduled = false;
+      let renderFrame = null;
       const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
       function stopWork() {
         workGeneration++;
@@ -17690,12 +17722,30 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       function records() {
         return userId ? repository.get(userId, limit()) : [];
       }
-      function render() {
+      function renderNow() {
         if (disposed) return;
         const visible = !!userId && config.get("enabled") && config.get("showDrawer") && !isInGame();
+        if (visible && !document.body) return;
+        const signature = `${visible}|${userId || ""}|${historyRevision}|${gameId() || ""}`;
+        if (signature === lastRenderSignature) return;
+        lastRenderSignature = signature;
         drawer.setVisible(visible);
         if (visible) drawer.render(records(), gameId());
         graph.refresh(records());
+      }
+      function scheduleRender() {
+        if (renderScheduled || disposed) return;
+        renderScheduled = true;
+        const run = () => {
+          renderScheduled = false;
+          renderFrame = null;
+          renderNow();
+        };
+        if (typeof requestAnimationFrame === "function") {
+          renderFrame = requestAnimationFrame(run);
+        } else {
+          renderFrame = setTimeout(run, 0);
+        }
       }
       function openGraph() {
         if (!config.get("enabled") || !userId) return;
@@ -17741,7 +17791,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
                   limit()
                 );
               }
-              render();
+              scheduleRender();
               await sleep2(150, signal);
             }
           } catch (error) {
@@ -17762,18 +17812,19 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         const id = userId;
         void (async () => {
           try {
-            await syncFeed({
+            const result = await syncFeed({
               userId: id,
               repository,
               limit: limit(),
-              windowDays: config.get("feedWindowDays"),
+              targetGames: config.get("feedTargetGames"),
               signal: controller.signal,
               onUpdate: () => {
                 if (generation !== workGeneration) return;
-                render();
+                scheduleRender();
                 startHydration(generation, controller.signal);
               }
             });
+            context.log(`feed sync added ${result.added} games across ${result.pages} page(s)`);
           } catch (error) {
             if (!(error instanceof DOMException && error.name === "AbortError")) {
               context.log("feed sync stopped", error);
@@ -17793,23 +17844,20 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           const request = ++accountRequest;
           const id = await waitForCurrentUserId({ timeoutMs });
           if (disposed || request !== accountRequest || !id) {
-            render();
+            renderNow();
             return;
           }
           if (id !== userId) {
             userId = id;
             stopWork();
-            render();
+            renderNow();
             if (!isInGame()) startWork();
             return;
           }
-          render();
+          renderNow();
         } finally {
           if (!force) accountWaiting = false;
         }
-      }
-      function updateUI() {
-        render();
       }
       const offNetwork = mockFetch(
         (url, init) => url.includes(API.duelOngoing) && String(init?.method || "GET").toUpperCase() === "DELETE",
@@ -17858,17 +17906,17 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           source: "websocket"
         };
         repository.merge(record, limit());
-        render();
+        scheduleRender();
         startHydration();
       });
       context.onCleanup(offWs);
       const offDom = onDomChange(() => {
-        updateUI();
         if (!userId) void refreshAccount(false, 1500);
       });
       context.onCleanup(offDom);
       const offHistory = repository.subscribe(() => {
-        render();
+        historyRevision++;
+        scheduleRender();
       });
       context.onCleanup(offHistory);
       const offConfig = context.config.subscribe((change) => {
@@ -17879,11 +17927,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           } else {
             stopWork();
             graph.close();
+            renderNow();
           }
         }
-        if (change.key === "showDrawer") render();
+        if (change.key === "showDrawer") scheduleRender();
         if (change.key === "historyLimit" && userId) repository.trim(userId, limit());
-        render();
+        scheduleRender();
       });
       context.onCleanup(offConfig);
       const onKeydown = (event) => {
@@ -17896,7 +17945,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       context.onCleanup(() => pageWindow().removeEventListener("keydown", onKeydown));
       context.onPageHide(() => repository.flush());
       context.onRoute(() => {
-        updateUI();
+        scheduleRender();
         if (isInGame()) stopWork();
         else if (!workAbort && userId && config.get("enabled")) startWork();
         void refreshAccount(true, 1500);
@@ -17904,13 +17953,18 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       context.onCleanup(() => {
         disposed = true;
         stopWork();
+        if (renderFrame !== null) {
+          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(renderFrame);
+          else clearTimeout(renderFrame);
+          renderFrame = null;
+        }
         graph.dispose();
         drawer.dispose();
         repository.dispose();
       });
       void waitForBody().then(() => {
         if (disposed) return;
-        updateUI();
+        scheduleRender();
         void refreshAccount(true, 15e3);
       }).catch((error) => context.log("waitForBody failed", error));
     }

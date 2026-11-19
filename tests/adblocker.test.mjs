@@ -5,7 +5,7 @@ import { Window } from "happy-dom";
 
 const bundle = fs.readFileSync("packages/adblocker/dist/geoguessr-adblocker.user.js", "utf8");
 
-async function runAdblocker(enabled) {
+async function runAdblocker(enabled, { readyState = "complete", waitMs = 650 } = {}) {
   const dom = new Window({ url: "https://www.geoguessr.com/" });
   Object.assign(globalThis, {
     window: dom,
@@ -20,6 +20,7 @@ async function runAdblocker(enabled) {
     MutationObserver: dom.MutationObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom),
   });
+  Object.defineProperty(dom.document, "readyState", { configurable: true, value: readyState });
   dom.localStorage.setItem(
     "gg.adblocker.config",
     JSON.stringify({
@@ -34,7 +35,7 @@ async function runAdblocker(enabled) {
     </dialog>
     <script src="https://doubleclick.net/ad.js"></script>`;
   new Function(bundle)();
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  await new Promise((resolve) => setTimeout(resolve, waitMs));
   return dom;
 }
 
@@ -45,5 +46,13 @@ test("disabled AdBlocker leaves blocked script elements alone", async () => {
 
 test("enabled AdBlocker removes blocked script elements", async () => {
   const dom = await runAdblocker(true);
+  assert.equal(dom.document.querySelector('script[src*="doubleclick"]'), null);
+});
+
+test("enabled AdBlocker waits for app readiness before destructive cleanup", async () => {
+  const dom = await runAdblocker(true, { readyState: "loading", waitMs: 120 });
+  assert.ok(dom.document.querySelector('script[src*="doubleclick"]'));
+  dom.window.dispatchEvent(new dom.Event("load"));
+  await new Promise((resolve) => setTimeout(resolve, 650));
   assert.equal(dom.document.querySelector('script[src*="doubleclick"]'), null);
 });

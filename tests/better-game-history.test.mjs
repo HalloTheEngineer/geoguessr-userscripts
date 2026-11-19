@@ -77,6 +77,12 @@ test("Better Game History mounts account-scoped history and graph access", async
   assert.match(dom.document.getElementById("bgh-history-scroll-area")?.textContent || "", /Rival/);
   assert.ok(dom.window.__GG_KIT_SETTINGS__.registrations.has("better-game-history"));
 
+  const row = dom.document.querySelector(".bgh-history-row");
+  assert.ok(row);
+  dom.document.body.appendChild(dom.document.createElement("div"));
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(dom.document.querySelector(".bgh-history-row"), row);
+
   dom.window.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "g", altKey: true }));
   assert.ok(dom.document.getElementById("bgh-history-graph"));
 });

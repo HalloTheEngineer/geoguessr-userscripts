@@ -115,3 +115,22 @@ test("history repository exposes pending records and flushes on dispose", () => 
   assert.ok(raw);
   assert.equal(JSON.parse(raw).data[0].gameId, "pending-1");
 });
+
+test("history survives repository recreation and keeps old games on new merges", () => {
+  localStorage.clear();
+  const first = createHistoryRepository();
+  first.merge(record({ gameId: "old-game", time: "2026-01-01T12:00:00.000Z" }), 2000);
+  first.dispose();
+
+  const second = createHistoryRepository();
+  assert.deepEqual(
+    second.get("user-1", 2000).map((item) => item.gameId),
+    ["old-game"],
+  );
+  second.merge(record({ gameId: "new-game", time: "2026-11-19T18:00:00.000Z" }), 2000);
+  assert.deepEqual(
+    second.get("user-1", 2000).map((item) => item.gameId),
+    ["new-game", "old-game"],
+  );
+  second.dispose();
+});

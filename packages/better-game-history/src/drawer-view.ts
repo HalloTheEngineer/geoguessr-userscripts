@@ -72,6 +72,21 @@ function kindLabel(record: GameRecord): string {
   return `${record.isTeamDuel ? "TEAM " : ""}${record.mode}`;
 }
 
+function rowSignature(record: GameRecord, active: boolean): string {
+  return [
+    record.gameId,
+    record.time,
+    record.mode,
+    record.isTeamDuel ? "1" : "0",
+    record.opponent || "",
+    record.opponentId || "",
+    record.win === undefined ? "" : record.win ? "1" : "0",
+    record.ratingChange === undefined ? "" : String(record.ratingChange),
+    record.hydration.state,
+    active ? "1" : "0",
+  ].join("|");
+}
+
 function rowHtml(record: GameRecord, active: boolean): string {
   const opponent = record.opponent || "Unknown Opponent";
   const opponentHtml = record.opponentId
@@ -179,22 +194,39 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     if (!scrollArea) return;
     activeId = activeGameId;
     const scrollTop = scrollArea.scrollTop;
-    scrollArea.replaceChildren();
     if (!records.length) {
-      const empty = document.createElement("div");
-      empty.className = "bgh-history-empty";
-      empty.textContent = "No games recorded yet. Play a duel to start your history.";
-      scrollArea.appendChild(empty);
+      if (!scrollArea.querySelector(".bgh-history-empty")) {
+        const empty = document.createElement("div");
+        empty.className = "bgh-history-empty";
+        empty.textContent = "No games recorded yet. Play a duel to start your history.";
+        scrollArea.replaceChildren(empty);
+      }
       return;
     }
-    const fragment = document.createDocumentFragment();
-    for (const record of records) {
-      const template = document.createElement("template");
-      template.innerHTML = rowHtml(record, record.gameId === activeId);
-      const row = template.content.firstElementChild;
-      if (row) fragment.appendChild(row);
+    const existing = new Map<string, HTMLElement>();
+    for (const child of scrollArea.querySelectorAll<HTMLElement>("[data-game-id]")) {
+      if (child.dataset.gameId) existing.set(child.dataset.gameId, child);
     }
-    scrollArea.appendChild(fragment);
+    const rows: HTMLElement[] = [];
+    for (const record of records) {
+      const signature = rowSignature(record, record.gameId === activeId);
+      let row = existing.get(record.gameId);
+      if (!row || row.dataset.signature !== signature) {
+        const template = document.createElement("template");
+        template.innerHTML = rowHtml(record, record.gameId === activeId);
+        const nextRow = template.content.firstElementChild as HTMLElement | null;
+        if (!nextRow) continue;
+        if (row) row.replaceWith(nextRow);
+        nextRow.dataset.signature = signature;
+        row = nextRow;
+      }
+      rows.push(row);
+    }
+    const currentRows = [...scrollArea.children];
+    const sameOrder =
+      currentRows.length === rows.length &&
+      currentRows.every((child, index) => child === rows[index]);
+    if (!sameOrder) scrollArea.replaceChildren(...rows);
     scrollArea.scrollTop = scrollTop;
   };
 

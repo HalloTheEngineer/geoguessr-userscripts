@@ -94,7 +94,7 @@ startUserscript({
     config,
     sections: [
       { id: "general", title: "General", fields: ["enabled", "showDrawer"] },
-      { id: "history", title: "History", fields: ["historyLimit", "feedWindowDays"] },
+      { id: "history", title: "History", fields: ["historyLimit", "feedTargetGames"] },
       {
         id: "graph",
         title: "Graph defaults",
@@ -129,6 +129,10 @@ startUserscript({
     let workGeneration = 0;
     let workAbort: AbortController | null = null;
     let hydrationRunning = false;
+    let historyRevision = 0;
+    let lastRenderSignature = "";
+    let renderScheduled = false;
+    let renderFrame: number | null = null;
 
     const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
 
@@ -143,12 +147,31 @@ startUserscript({
       return userId ? repository.get(userId, limit()) : [];
     }
 
-    function render(): void {
+    function renderNow(): void {
       if (disposed) return;
       const visible = !!userId && config.get("enabled") && config.get("showDrawer") && !isInGame();
+      if (visible && !document.body) return;
+      const signature = `${visible}|${userId || ""}|${historyRevision}|${gameId() || ""}`;
+      if (signature === lastRenderSignature) return;
+      lastRenderSignature = signature;
       drawer.setVisible(visible);
       if (visible) drawer.render(records(), gameId());
       graph.refresh(records());
+    }
+
+    function scheduleRender(): void {
+      if (renderScheduled || disposed) return;
+      renderScheduled = true;
+      const run = () => {
+        renderScheduled = false;
+        renderFrame = null;
+        renderNow();
+      };
+      if (typeof requestAnimationFrame === "function") {
+        renderFrame = requestAnimationFrame(run);
+      } else {
+        renderFrame = setTimeout(run, 0) as unknown as number;
+      }
     }
 
     function openGraph(): void {
@@ -196,7 +219,7 @@ startUserscript({
                 limit(),
               );
             }
-            render();
+            scheduleRender();
             await sleep(150, signal);
           }
         } catch (error) {
@@ -218,18 +241,19 @@ startUserscript({
       const id = userId;
       void (async () => {
         try {
-          await syncFeed({
+          const result = await syncFeed({
             userId: id,
             repository,
             limit: limit(),
-            windowDays: config.get("feedWindowDays"),
+            targetGames: config.get("feedTargetGames"),
             signal: controller.signal,
             onUpdate: () => {
               if (generation !== workGeneration) return;
-              render();
+              scheduleRender();
               startHydration(generation, controller.signal);
             },
           });
+          context.log(`feed sync added ${result.added} games across ${result.pages} page(s)`);
         } catch (error) {
           if (!(error instanceof DOMException && error.name === "AbortError")) {
             context.log("feed sync stopped", error);
@@ -250,24 +274,20 @@ startUserscript({
         const request = ++accountRequest;
         const id = await waitForCurrentUserId({ timeoutMs });
         if (disposed || request !== accountRequest || !id) {
-          render();
+          renderNow();
           return;
         }
         if (id !== userId) {
           userId = id;
           stopWork();
-          render();
+          renderNow();
           if (!isInGame()) startWork();
           return;
         }
-        render();
+        renderNow();
       } finally {
         if (!force) accountWaiting = false;
       }
-    }
-
-    function updateUI(): void {
-      render();
     }
 
     const offNetwork = mockFetch(
@@ -333,19 +353,19 @@ startUserscript({
         source: "websocket",
       };
       repository.merge(record, limit());
-      render();
+      scheduleRender();
       startHydration();
     });
     context.onCleanup(offWs);
 
     const offDom = onDomChange(() => {
-      updateUI();
       if (!userId) void refreshAccount(false, 1500);
     });
     context.onCleanup(offDom);
 
     const offHistory = repository.subscribe(() => {
-      render();
+      historyRevision++;
+      scheduleRender();
     });
     context.onCleanup(offHistory);
 
@@ -357,11 +377,12 @@ startUserscript({
         } else {
           stopWork();
           graph.close();
+          renderNow();
         }
       }
-      if (change.key === "showDrawer") render();
+      if (change.key === "showDrawer") scheduleRender();
       if (change.key === "historyLimit" && userId) repository.trim(userId, limit());
-      render();
+      scheduleRender();
     });
     context.onCleanup(offConfig);
 
@@ -377,7 +398,7 @@ startUserscript({
     context.onPageHide(() => repository.flush());
 
     context.onRoute(() => {
-      updateUI();
+      scheduleRender();
       if (isInGame()) stopWork();
       else if (!workAbort && userId && config.get("enabled")) startWork();
       void refreshAccount(true, 1500);
@@ -385,6 +406,11 @@ startUserscript({
     context.onCleanup(() => {
       disposed = true;
       stopWork();
+      if (renderFrame !== null) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(renderFrame);
+        else clearTimeout(renderFrame);
+        renderFrame = null;
+      }
       graph.dispose();
       drawer.dispose();
       repository.dispose();
@@ -393,7 +419,7 @@ startUserscript({
     void waitForBody()
       .then(() => {
         if (disposed) return;
-        updateUI();
+        scheduleRender();
         void refreshAccount(true, 15_000);
       })
       .catch((error) => context.log("waitForBody failed", error));

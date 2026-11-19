@@ -17,7 +17,7 @@ export interface FeedSyncOptions {
   userId: string;
   repository: HistoryRepository;
   limit: number;
-  windowDays: number;
+  targetGames: number;
   signal?: AbortSignal;
   onUpdate: () => void;
 }
@@ -27,7 +27,7 @@ export interface FeedSyncResult {
   pages: number;
 }
 
-const MAX_PAGES = 25;
+const MAX_PAGES = 100;
 const PAGE_SIZE = 50;
 
 function parsePayload(value: unknown): FeedPayload | null {
@@ -78,16 +78,16 @@ function payloadToRecord(
 }
 
 export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult> {
-  const { userId, repository, limit, windowDays, signal, onUpdate } = options;
-  const cutoff = Date.now() - Math.max(1, windowDays) * 86_400_000;
+  const { userId, repository, limit, targetGames, signal, onUpdate } = options;
+  const target = Math.max(1, Math.min(Math.floor(targetGames), Math.floor(limit)));
   const known = new Set(repository.get(userId, limit).map((record) => record.gameId));
   const seenTokens = new Set<string>();
+  const maxPages = Math.min(MAX_PAGES, Math.max(1, Math.ceil(target / PAGE_SIZE) + 10));
   let token: string | null = null;
-  let oldest = Number.POSITIVE_INFINITY;
   let added = 0;
   let pages = 0;
 
-  while (pages < MAX_PAGES) {
+  while (pages < maxPages) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const page = await feedPage(token, PAGE_SIZE);
     pages++;
@@ -98,9 +98,6 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
     for (const entry of entries) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const entryTime = typeof entry.time === "string" ? entry.time : undefined;
-      const entryTimestamp = entryTime ? new Date(entryTime).getTime() : Number.NaN;
-      if (Number.isFinite(entryTimestamp)) oldest = Math.min(oldest, entryTimestamp);
-
       const processPayload = (payload: FeedPayload | null) => {
         if (!payload || !isDuelType(entry.type)) return;
         const record = payloadToRecord(payload, entryTime, userId);
@@ -119,10 +116,10 @@ export async function syncFeed(options: FeedSyncOptions): Promise<FeedSyncResult
     }
 
     if (pageAdded) onUpdate();
+    if (known.size >= target) break;
     if (!page.paginationToken) break;
     if (seenTokens.has(page.paginationToken)) break;
     seenTokens.add(page.paginationToken);
-    if (oldest <= cutoff) break;
     token = page.paginationToken;
     await sleep(200, signal);
   }

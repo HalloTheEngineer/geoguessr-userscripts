@@ -1490,6 +1490,90 @@
     ]
   };
 
+  // src/app-ready.ts
+  function abortError() {
+    return new DOMException("Aborted", "AbortError");
+  }
+  function waitForLoad(signal) {
+    if (document.readyState === "complete") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(abortError());
+        return;
+      }
+      const onAbort = () => {
+        window.removeEventListener("load", onLoad);
+        reject(abortError());
+      };
+      const onLoad = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      window.addEventListener("load", onLoad, { once: true });
+    });
+  }
+  function waitForDomQuiet(quietMs, maxWaitMs, signal) {
+    if (signal?.aborted) return Promise.reject(abortError());
+    if (typeof MutationObserver === "undefined") {
+      return new Promise((resolve) => setTimeout(resolve, quietMs));
+    }
+    return new Promise((resolve, reject) => {
+      let quietTimer = null;
+      let maxTimer = null;
+      let finished = false;
+      const cleanup = () => {
+        if (quietTimer) clearTimeout(quietTimer);
+        if (maxTimer) clearTimeout(maxTimer);
+        observer.disconnect();
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolve();
+      };
+      const onAbort = () => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        reject(abortError());
+      };
+      const reset = () => {
+        if (quietTimer) clearTimeout(quietTimer);
+        quietTimer = setTimeout(finish, quietMs);
+      };
+      const observer = new MutationObserver(reset);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      maxTimer = setTimeout(finish, Math.max(quietMs, maxWaitMs));
+      reset();
+    });
+  }
+  function waitForIdle() {
+    return new Promise((resolve) => {
+      const win = window;
+      if (typeof win.requestIdleCallback === "function") {
+        win.requestIdleCallback(() => resolve(), { timeout: 1e3 });
+      } else {
+        setTimeout(resolve, 50);
+      }
+    });
+  }
+  async function waitForAppReady(options = {}) {
+    const quietMs = options.quietMs ?? 200;
+    const maxWaitMs = options.maxWaitMs ?? 3e3;
+    const signal = options.signal;
+    if (signal?.aborted) throw abortError();
+    await waitForLoad(signal);
+    if (signal?.aborted) throw abortError();
+    await waitForDomQuiet(quietMs, maxWaitMs, signal);
+    if (signal?.aborted) throw abortError();
+    await waitForIdle();
+    if (signal?.aborted) throw abortError();
+  }
+
   // src/config.ts
   var adblockerConfig = defineConfig({
     key: "gg.adblocker.config",
@@ -1692,7 +1776,7 @@
     else injectStyle("geoguessr-adblocker-style", css);
   }
   function scanAndRemoveScripts(node) {
-    if (!node || !categoryEnabled("ads")) return;
+    if (!appReady || !node || !categoryEnabled("ads")) return;
     const element = node;
     if ((element.tagName === "SCRIPT" || element.tagName === "IFRAME") && isBlockedUrl(element.getAttribute("src"))) {
       element.remove();
@@ -1718,6 +1802,13 @@
     else setTimeout(run, 0);
   }
   function blockElements() {
+    if (!appReady) {
+      if (!adblockerConfig.get("enabled")) {
+        document.getElementById("ggb-insert-links")?.remove();
+      }
+      syncCss();
+      return;
+    }
     if (!adblockerConfig.get("enabled")) {
       document.getElementById("ggb-insert-links")?.remove();
       syncCss();
@@ -1768,6 +1859,7 @@
     syncCss();
     if (count) log("elements handled", count);
   }
+  var appReady = false;
   startUserscript({
     name: "adblocker",
     version: "2026.11.20",
@@ -1792,7 +1884,7 @@
     } : null,
     setup(context) {
       const observer = new MutationObserver((mutations) => {
-        if (!adblockerConfig.get("enabled")) return;
+        if (!appReady || !adblockerConfig.get("enabled")) return;
         let changed = false;
         for (const mutation of mutations) {
           for (const node of mutation.addedNodes) {
@@ -1806,6 +1898,8 @@
       });
       let observing = false;
       let retry = null;
+      let routeTimer = null;
+      let readyController = null;
       const stopObserver = () => {
         if (retry) {
           clearTimeout(retry);
@@ -1815,7 +1909,7 @@
         observing = false;
       };
       const startObserver = () => {
-        if (observing || retry || !adblockerConfig.get("enabled")) return;
+        if (!appReady || observing || retry || !adblockerConfig.get("enabled")) return;
         const root = document.documentElement;
         if (!root) {
           retry = setTimeout(() => {
@@ -1828,35 +1922,66 @@
         observing = true;
         context.log("initialized");
       };
+      const runCleanup = () => {
+        if (!appReady || !adblockerConfig.get("enabled")) return;
+        startObserver();
+        blockElements();
+        scanAndRemoveScripts(document.documentElement);
+      };
+      const stopReadyWait = () => {
+        readyController?.abort();
+        readyController = null;
+      };
+      const scheduleReady = () => {
+        if (appReady || readyController || !adblockerConfig.get("enabled")) return;
+        const controller = new AbortController();
+        readyController = controller;
+        void waitForAppReady({ signal: controller.signal }).then(() => {
+          if (controller.signal.aborted || !adblockerConfig.get("enabled")) return;
+          appReady = true;
+          runCleanup();
+        }).catch((error) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            context.log("app readiness wait failed", error);
+          }
+        }).finally(() => {
+          if (readyController === controller) readyController = null;
+        });
+      };
       const sync = () => {
-        if (adblockerConfig.get("enabled")) {
-          startObserver();
-          blockElements();
-          scanAndRemoveScripts(document.documentElement);
-        } else {
+        syncCss();
+        if (!adblockerConfig.get("enabled")) {
+          stopReadyWait();
           stopObserver();
           blockElements();
+          return;
         }
+        if (!appReady) {
+          scheduleReady();
+          return;
+        }
+        runCleanup();
       };
       const unsubscribe = adblockerConfig.subscribe(sync);
       context.onCleanup(unsubscribe);
-      const onReady = () => {
-        if (!adblockerConfig.get("enabled")) return;
-        blockElements();
-        scanAndRemoveScripts(document.body);
-      };
-      window.addEventListener("DOMContentLoaded", onReady, { once: true });
-      startObserver();
-      blockElements();
-      scanAndRemoveScripts(document.documentElement);
+      scheduleReady();
+      syncCss();
       context.onRoute(() => {
         if (!adblockerConfig.get("enabled")) return;
-        blockElements();
-        scanAndRemoveScripts(document.documentElement);
+        if (!appReady) {
+          scheduleReady();
+          return;
+        }
+        if (routeTimer) clearTimeout(routeTimer);
+        routeTimer = setTimeout(() => {
+          routeTimer = null;
+          runCleanup();
+        }, 100);
       });
       context.onCleanup(() => {
+        stopReadyWait();
         stopObserver();
-        window.removeEventListener("DOMContentLoaded", onReady);
+        if (routeTimer) clearTimeout(routeTimer);
         document.getElementById("geoguessr-adblocker-style")?.remove();
         document.getElementById("ggb-insert-links")?.remove();
       });
