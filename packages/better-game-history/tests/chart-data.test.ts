@@ -137,3 +137,32 @@ test("team graph filters by team composition and uses team rating", () => {
     ["You + Alice", "You + Bob"],
   );
 });
+
+test("team options use the name resolver for raw teammate IDs", () => {
+  const team = record({
+    isTeamDuel: true,
+    teamKey: "me:alice",
+    teammateIds: ["alice"],
+    teammateNicks: ["alice"],
+  });
+  const options = getTeamOptions([team], (id, fallback) =>
+    id === "alice" ? "Alice" : fallback || id || "Unknown",
+  );
+  assert.equal(options[0]?.label, "You + Alice");
+  assert.deepEqual(options[0]?.playerIds, ["alice"]);
+});
+
+test("candle labels use readable date styles", () => {
+  const points = getChartData(
+    [
+      record({ time: "2026-11-19T12:00:00.000Z", avgScore: 100 }),
+      record({ gameId: "second", time: "2026-12-02T12:00:00.000Z", avgScore: 200 }),
+    ],
+    { timeframe: "All", metric: "avgScore", typeFilter: "All", modeFilter: "All" },
+    Date.parse("2026-12-03T00:00:00.000Z"),
+  );
+  const daily = groupCandles(points, "daily", "30d");
+  assert.match(daily[0]?.label || "", /Nov/);
+  const monthly = groupCandles(points, "monthly", "All");
+  assert.match(monthly[0]?.label || "", /Nov 2026/);
+});

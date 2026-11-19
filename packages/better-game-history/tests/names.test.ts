@@ -45,3 +45,17 @@ test("records ignore IDs and keep explicit nicknames", () => {
   assert.equal(names.nameFor("605cb28fdc80d50001eeca89", "FallbackNick"), "FallbackNick");
   names.dispose();
 });
+
+test("missing names can be resolved asynchronously without blocking", async () => {
+  localStorage.clear();
+  dom.window.fetch = (async () =>
+    new Response(JSON.stringify({ nick: "AsyncNick" }), {
+      status: 200,
+    })) as typeof dom.window.fetch;
+  const names = createNameStore();
+  names.resolve(["abcdef1234567890"]);
+  assert.equal(names.nameFor("abcdef1234567890"), "#567890");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(names.nameFor("abcdef1234567890"), "AsyncNick");
+  names.dispose();
+});

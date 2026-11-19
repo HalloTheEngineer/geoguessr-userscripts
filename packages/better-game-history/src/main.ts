@@ -120,7 +120,10 @@ startUserscript({
   setup(context) {
     const repository = createHistoryRepository();
     const names = createNameStore();
-    const graph = createGraphView({ nameFor: names.nameFor });
+    const graph = createGraphView({
+      nameFor: names.nameFor,
+      resolveNames: (playerIds) => names.resolve(playerIds),
+    });
     const drawer = createDrawerView({
       nameFor: names.nameFor,
       onGraph: () => openGraph(),

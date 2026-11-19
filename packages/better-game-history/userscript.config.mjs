@@ -5,7 +5,7 @@ export default {
   meta: "src/userscript.meta.txt",
   versionDefine: "__BGH_VERSION__",
   noframes: true,
-  sizeBudget: 620000,
+  sizeBudget: 650000,
   site: {
     displayName: "Better Game History",
     summary: "Keeps ranked solo and team history with selectable team rating graphs.",

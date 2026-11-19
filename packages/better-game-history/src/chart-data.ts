@@ -21,8 +21,11 @@ function pointLabel(date: Date, timeframe: GraphFilters["timeframe"]): string {
   if (timeframe === "24h") {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  return date.toLocaleDateString([], {
-    month: "numeric",
+  if (timeframe === "All") {
+    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  }
+  return date.toLocaleString([], {
+    month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
@@ -61,6 +64,7 @@ export interface TeamOption {
   key: string;
   label: string;
   count: number;
+  playerIds: string[];
 }
 
 export function getTeamOptions(
@@ -75,9 +79,18 @@ export function getTeamOptions(
       existing.count++;
       continue;
     }
-    const teammates = (record.teammateNicks || []).filter((nick) => nick && nick !== record.userId);
-    const label = teammates.length ? `You + ${teammates.join(" & ")}` : "Your team";
-    teams.set(record.teamKey, { key: record.teamKey, label, count: 1 });
+    const teammateIds = record.teammateIds || [];
+    const teammateNicks = record.teammateNicks || [];
+    const detail = teammateIds.length
+      ? teammateIds.map((playerId, index) => nameFor(playerId, teammateNicks[index])).join(" & ")
+      : teammateNicks.filter(Boolean).join(" & ");
+    const label = detail ? `You + ${detail}` : "Your team";
+    teams.set(record.teamKey, {
+      key: record.teamKey,
+      label,
+      count: 1,
+      playerIds: teammateIds,
+    });
   }
   return [...teams.values()].sort(
     (left, right) => right.count - left.count || left.label.localeCompare(right.label),
@@ -149,15 +162,30 @@ export function candleKey(point: GraphPoint, mode: Exclude<CandleMode, "none">):
   return point.dailyKey;
 }
 
-export function candleLabel(point: GraphPoint, mode: Exclude<CandleMode, "none">): string {
-  if (mode === "hourly") return point.hourlyKey;
-  if (mode === "monthly") return point.monthlyKey;
-  return point.dailyKey;
+export function candleLabel(
+  point: GraphPoint,
+  mode: Exclude<CandleMode, "none">,
+  timeframe: GraphFilters["timeframe"] = "All",
+): string {
+  const date = new Date(point.time);
+  if (mode === "hourly") {
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return timeframe === "24h"
+      ? time
+      : date.toLocaleDateString([], { month: "short", day: "numeric" }) + ` ${time}`;
+  }
+  if (mode === "monthly") {
+    return date.toLocaleDateString([], { month: "short", year: "numeric" });
+  }
+  return timeframe === "All"
+    ? date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+    : date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export function groupCandles(
   points: readonly GraphPoint[],
   mode: Exclude<CandleMode, "none">,
+  timeframe: GraphFilters["timeframe"] = "All",
 ): CandleGroup[] {
   const groups = new Map<string, CandleGroup>();
   for (const point of points) {
@@ -165,7 +193,7 @@ export function groupCandles(
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
-        label: candleLabel(point, mode),
+        label: candleLabel(point, mode, timeframe),
         open: point.value,
         high: point.value,
         low: point.value,

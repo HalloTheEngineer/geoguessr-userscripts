@@ -17096,8 +17096,11 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     if (timeframe === "24h") {
       return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
-    return date.toLocaleDateString([], {
-      month: "numeric",
+    if (timeframe === "All") {
+      return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    }
+    return date.toLocaleString([], {
+      month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit"
@@ -17133,9 +17136,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         existing.count++;
         continue;
       }
-      const teammates = (record.teammateNicks || []).filter((nick) => nick && nick !== record.userId);
-      const label = teammates.length ? `You + ${teammates.join(" & ")}` : "Your team";
-      teams.set(record.teamKey, { key: record.teamKey, label, count: 1 });
+      const teammateIds = record.teammateIds || [];
+      const teammateNicks = record.teammateNicks || [];
+      const detail = teammateIds.length ? teammateIds.map((playerId, index2) => nameFor(playerId, teammateNicks[index2])).join(" & ") : teammateNicks.filter(Boolean).join(" & ");
+      const label = detail ? `You + ${detail}` : "Your team";
+      teams.set(record.teamKey, {
+        key: record.teamKey,
+        label,
+        count: 1,
+        playerIds: teammateIds
+      });
     }
     return [...teams.values()].sort(
       (left, right) => right.count - left.count || left.label.localeCompare(right.label)
@@ -17189,19 +17199,25 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     if (mode === "monthly") return point.monthlyKey;
     return point.dailyKey;
   }
-  function candleLabel(point, mode) {
-    if (mode === "hourly") return point.hourlyKey;
-    if (mode === "monthly") return point.monthlyKey;
-    return point.dailyKey;
+  function candleLabel(point, mode, timeframe = "All") {
+    const date = new Date(point.time);
+    if (mode === "hourly") {
+      const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return timeframe === "24h" ? time : date.toLocaleDateString([], { month: "short", day: "numeric" }) + ` ${time}`;
+    }
+    if (mode === "monthly") {
+      return date.toLocaleDateString([], { month: "short", year: "numeric" });
+    }
+    return timeframe === "All" ? date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : date.toLocaleDateString([], { month: "short", day: "numeric" });
   }
-  function groupCandles(points, mode) {
+  function groupCandles(points, mode, timeframe = "All") {
     const groups = /* @__PURE__ */ new Map();
     for (const point of points) {
       const key = candleKey(point, mode);
       const existing = groups.get(key);
       if (!existing) {
         groups.set(key, {
-          label: candleLabel(point, mode),
+          label: candleLabel(point, mode, timeframe),
           open: point.value,
           high: point.value,
           low: point.value,
@@ -17326,6 +17342,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const style = injectStyle(STYLE_ID3, STYLES2);
     let dialog = null;
     let chart = null;
+    let canvasHost = null;
+    let canvas = null;
+    let emptyState = null;
+    let refreshFrame = null;
     let records = [];
     let filters = {
       timeframe: "7d",
@@ -17338,8 +17358,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       candleMode: "none"
     };
     const cleanup = () => {
+      if (refreshFrame !== null) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(refreshFrame);
+        else clearTimeout(refreshFrame);
+        refreshFrame = null;
+      }
       chart?.destroy();
       chart = null;
+      canvasHost = null;
+      canvas = null;
+      emptyState = null;
       records = [];
       if (dialog) {
         dialog.remove();
@@ -17352,13 +17380,18 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     };
     const render = () => {
       if (!dialog) return;
-      chart?.destroy();
-      chart = null;
+      if (refreshFrame !== null) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(refreshFrame);
+        else clearTimeout(refreshFrame);
+        refreshFrame = null;
+      }
       const teamOptions = getTeamOptions(records, options.nameFor);
       if (filters.queue === "team") {
         if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
           filters.teamKey = teamOptions[0]?.key || "";
         }
+        const selectedTeam = teamOptions.find((team) => team.key === filters.teamKey);
+        if (selectedTeam) options.resolveNames?.(selectedTeam.playerIds);
       } else {
         filters.teamKey = "";
       }
@@ -17367,7 +17400,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (!shell) return;
       const title = shell.querySelector("#bgh-graph-title");
       const toolbar = shell.querySelector(".bgh-graph-toolbar");
-      const canvasHost = shell.querySelector(".bgh-graph-chart");
+      canvasHost = shell.querySelector(".bgh-graph-chart");
       if (title) {
         const label = formatMetricLabel(filters.metric, filters.candleMode);
         title.textContent = filters.queue === "team" ? `Team ${label}` : label;
@@ -17423,16 +17456,32 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       if (note) {
         note.textContent = filters.queue === "team" ? "Team rating is separate from solo rating. Select one team composition at a time." : "Solo ranked duels only. Team duels use the Team queue.";
       }
-      canvasHost.replaceChildren();
+      if (!canvasHost) return;
+      if (!canvas) {
+        canvas = document.createElement("canvas");
+        canvasHost.appendChild(canvas);
+      }
+      if (!emptyState) {
+        emptyState = document.createElement("div");
+        emptyState.className = "bgh-graph-empty";
+        canvasHost.appendChild(emptyState);
+      }
       if (!chartData.length) {
-        const empty = document.createElement("div");
-        empty.className = "bgh-graph-empty";
-        empty.textContent = "No games match these filters yet.";
-        canvasHost.appendChild(empty);
+        canvas.style.display = "none";
+        emptyState.hidden = false;
+        emptyState.textContent = "No games match these filters yet.";
+        if (chart) {
+          chart.data.labels = [];
+          chart.data.datasets = [];
+          chart.update("none");
+        }
         return;
       }
+      canvas.style.display = "";
+      emptyState.hidden = true;
       const labels = [];
       const datasets = [];
+      let candleGroups = null;
       if (filters.candleMode === "none") {
         labels.push(...chartData.map((point) => point.label));
         datasets.push({
@@ -17454,7 +17503,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           z: 10
         });
       } else {
-        const groups2 = groupCandles(chartData, filters.candleMode);
+        const groups2 = groupCandles(chartData, filters.candleMode, filters.timeframe);
+        candleGroups = groups2;
         labels.push(...groups2.map((group) => group.label));
         if (filters.metric === "gameCount") {
           datasets.push({
@@ -17487,7 +17537,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         }
       }
       if (filters.showTrend) {
-        const source = filters.candleMode === "none" ? chartData.map((point) => point.value) : groupCandles(chartData, filters.candleMode).map(
+        const source = filters.candleMode === "none" ? chartData.map((point) => point.value) : (candleGroups || []).map(
           (group) => filters.metric === "gameCount" ? group.count : group.values.reduce((total, value) => total + value, 0) / group.values.length
         );
         datasets.push({
@@ -17504,8 +17554,6 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           grouped: false
         });
       }
-      const canvas = document.createElement("canvas");
-      canvasHost.appendChild(canvas);
       const context = canvas.getContext("2d");
       if (!context) return;
       const flat = finiteNumbers(
@@ -17516,10 +17564,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         )
       );
       if (!flat.length) {
-        const empty = document.createElement("div");
-        empty.className = "bgh-graph-empty";
-        empty.textContent = "No numeric data matches these filters.";
-        canvasHost.appendChild(empty);
+        canvas.style.display = "none";
+        emptyState.hidden = false;
+        emptyState.textContent = "No numeric data matches these filters.";
         return;
       }
       let minimum = Math.min(...flat);
@@ -17529,10 +17576,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         maximum = Math.max(maximum, 0.5);
       }
       const padding = maximum - minimum === 0 ? 5 : (maximum - minimum) * 0.1;
+      const isCandle = filters.candleMode !== "none";
       const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         interaction: { intersect: false, mode: "index" },
+        layout: { padding: { left: 10, right: 10 } },
         onClick: (_event, elements2) => {
           const element = elements2[0];
           if (!element || filters.candleMode !== "none") return;
@@ -17551,13 +17601,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
                 if (context2.dataset.label === "Trend") {
                   return `Trend: ${Number(context2.parsed.y).toFixed(1)}`;
                 }
-                if (filters.candleMode !== "none") {
+                if (isCandle) {
                   return `${context2.dataset.label}: ${context2.parsed.y ?? context2.parsed._custom}`;
                 }
                 return `${filters.metric}: ${context2.parsed.y}`;
               },
               afterLabel: (context2) => {
-                if (filters.candleMode !== "none") return "";
+                if (isCandle) return "";
                 const point = chartData[context2.dataIndex];
                 if (!point) return [];
                 return [
@@ -17573,19 +17623,34 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
             min: filters.metric === "gameCount" ? 0 : Math.floor(minimum - padding),
             max: Math.ceil(maximum + padding),
             grid: { color: "rgba(255,255,255,.05)" },
-            ticks: { color: "#888" }
+            ticks: { color: "#8b88a0", font: { size: 10 } }
           },
           x: {
+            offset: isCandle || filters.metric === "gameCount",
             grid: { display: false },
-            ticks: { color: "#888", autoSkip: true, maxTicksLimit: 12 }
+            ticks: {
+              color: "#8b88a0",
+              autoSkip: true,
+              maxTicksLimit: 8,
+              maxRotation: 0,
+              padding: 8,
+              font: { size: 10, weight: "600" }
+            }
           }
         }
       };
-      chart = new auto_default(context, {
-        type: datasets[0]?.type === "bar" ? "bar" : "line",
-        data: { labels, datasets },
-        options
-      });
+      if (!chart) {
+        chart = new auto_default(context, {
+          type: "bar",
+          data: { labels, datasets },
+          options: chartOptions
+        });
+      } else {
+        chart.data.labels = labels;
+        chart.data.datasets = datasets;
+        chart.options = chartOptions;
+        chart.update("none");
+      }
     };
     const mount = () => {
       if (dialog) return;
@@ -17626,7 +17691,13 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       },
       refresh(nextRecords) {
         records = nextRecords;
-        if (dialog) render();
+        if (!dialog || refreshFrame !== null) return;
+        const run = () => {
+          refreshFrame = null;
+          render();
+        };
+        if (typeof requestAnimationFrame === "function") refreshFrame = requestAnimationFrame(run);
+        else refreshFrame = setTimeout(run, 0);
       },
       close,
       dispose() {
@@ -17960,6 +18031,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     const store = createJsonStore({ key: KEY5, version: VERSION });
     let names2 = sanitize(store.get());
     let revision = 0;
+    let disposed = false;
+    let resolving = false;
+    let cooldownUntil = 0;
+    const queue = [];
+    const queued = /* @__PURE__ */ new Set();
+    const attempts = /* @__PURE__ */ new Map();
     const listeners = /* @__PURE__ */ new Set();
     const notify = () => {
       revision++;
@@ -17990,6 +18067,59 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       persist();
       notify();
     };
+    const delay = (ms) => new Promise((resolve3) => setTimeout(resolve3, ms));
+    const pump = async () => {
+      if (resolving || disposed) return;
+      resolving = true;
+      try {
+        while (queue.length && !disposed) {
+          const wait = cooldownUntil - Date.now();
+          if (wait > 0) await delay(wait);
+          const playerId = queue.shift();
+          if (!playerId) continue;
+          queued.delete(playerId);
+          if (names2[playerId] || (attempts.get(playerId) || 0) >= 2) continue;
+          try {
+            const response = await pageWindow().fetch(`${API.users}${encodeURIComponent(playerId)}`, {
+              credentials: "include"
+            });
+            if (response.status === 429) {
+              const retryAfter = Number(response.headers.get("retry-after")) * 1e3;
+              cooldownUntil = Date.now() + (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 3e4);
+              const count = (attempts.get(playerId) || 0) + 1;
+              attempts.set(playerId, count);
+              if (count < 2 && !queued.has(playerId)) {
+                queue.unshift(playerId);
+                queued.add(playerId);
+              }
+              continue;
+            }
+            if (response.ok) {
+              const profile = await response.json();
+              if (typeof profile.nick === "string") record(playerId, profile.nick);
+              else attempts.set(playerId, 2);
+            } else {
+              attempts.set(playerId, 2);
+            }
+          } catch {
+            attempts.set(playerId, (attempts.get(playerId) || 0) + 1);
+          }
+          await delay(1500);
+        }
+      } finally {
+        resolving = false;
+        if (queue.length && !disposed) void pump();
+      }
+    };
+    const resolve2 = (playerIds) => {
+      for (const playerId of playerIds) {
+        if (!playerId || names2[playerId] || queued.has(playerId) || (attempts.get(playerId) || 0) >= 2)
+          continue;
+        queue.push(playerId);
+        queued.add(playerId);
+      }
+      void pump();
+    };
     const captureVisitedProfile = () => {
       if (!location.pathname.startsWith("/user/")) return;
       const data = nextData();
@@ -18001,6 +18131,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         return revision;
       },
       captureVisitedProfile,
+      resolve: resolve2,
       record,
       shortId,
       nameFor(playerId, fallback) {
@@ -18013,6 +18144,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         return () => listeners.delete(listener);
       },
       dispose() {
+        disposed = true;
+        queue.length = 0;
+        queued.clear();
         listeners.clear();
       }
     };
@@ -18075,7 +18209,10 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     setup(context) {
       const repository = createHistoryRepository();
       const names2 = createNameStore();
-      const graph = createGraphView({ nameFor: names2.nameFor });
+      const graph = createGraphView({
+        nameFor: names2.nameFor,
+        resolveNames: (playerIds) => names2.resolve(playerIds)
+      });
       const drawer = createDrawerView({
         nameFor: names2.nameFor,
         onGraph: () => openGraph(),

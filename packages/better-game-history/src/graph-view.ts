@@ -102,6 +102,7 @@ const STYLES = `
 
 export interface GraphViewOptions {
   nameFor: (playerId: string | undefined, fallback?: string) => string;
+  resolveNames?: (playerIds: readonly string[]) => void;
 }
 
 export interface GraphView {
@@ -134,6 +135,10 @@ export function createGraphView(options: GraphViewOptions): GraphView {
   const style = injectStyle(STYLE_ID, STYLES);
   let dialog: HTMLDialogElement | null = null;
   let chart: Chart | null = null;
+  let canvasHost: HTMLElement | null = null;
+  let canvas: HTMLCanvasElement | null = null;
+  let emptyState: HTMLElement | null = null;
+  let refreshFrame: number | null = null;
   let records: readonly GameRecord[] = [];
   let filters: GraphFilters = {
     timeframe: "7d",
@@ -147,8 +152,16 @@ export function createGraphView(options: GraphViewOptions): GraphView {
   };
 
   const cleanup = () => {
+    if (refreshFrame !== null) {
+      if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(refreshFrame);
+      else clearTimeout(refreshFrame);
+      refreshFrame = null;
+    }
     chart?.destroy();
     chart = null;
+    canvasHost = null;
+    canvas = null;
+    emptyState = null;
     records = [];
     if (dialog) {
       dialog.remove();
@@ -163,13 +176,18 @@ export function createGraphView(options: GraphViewOptions): GraphView {
 
   const render = () => {
     if (!dialog) return;
-    chart?.destroy();
-    chart = null;
+    if (refreshFrame !== null) {
+      if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(refreshFrame);
+      else clearTimeout(refreshFrame);
+      refreshFrame = null;
+    }
     const teamOptions = getTeamOptions(records, options.nameFor);
     if (filters.queue === "team") {
       if (!filters.teamKey || !teamOptions.some((team) => team.key === filters.teamKey)) {
         filters.teamKey = teamOptions[0]?.key || "";
       }
+      const selectedTeam = teamOptions.find((team) => team.key === filters.teamKey);
+      if (selectedTeam) options.resolveNames?.(selectedTeam.playerIds);
     } else {
       filters.teamKey = "";
     }
@@ -178,7 +196,7 @@ export function createGraphView(options: GraphViewOptions): GraphView {
     if (!shell) return;
     const title = shell.querySelector<HTMLElement>("#bgh-graph-title");
     const toolbar = shell.querySelector<HTMLElement>(".bgh-graph-toolbar");
-    const canvasHost = shell.querySelector<HTMLElement>(".bgh-graph-chart");
+    canvasHost = shell.querySelector<HTMLElement>(".bgh-graph-chart");
     if (title) {
       const label = formatMetricLabel(filters.metric, filters.candleMode);
       title.textContent = filters.queue === "team" ? `Team ${label}` : label;
@@ -256,17 +274,33 @@ export function createGraphView(options: GraphViewOptions): GraphView {
           : "Solo ranked duels only. Team duels use the Team queue.";
     }
 
-    canvasHost.replaceChildren();
+    if (!canvasHost) return;
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvasHost.appendChild(canvas);
+    }
+    if (!emptyState) {
+      emptyState = document.createElement("div");
+      emptyState.className = "bgh-graph-empty";
+      canvasHost.appendChild(emptyState);
+    }
     if (!chartData.length) {
-      const empty = document.createElement("div");
-      empty.className = "bgh-graph-empty";
-      empty.textContent = "No games match these filters yet.";
-      canvasHost.appendChild(empty);
+      canvas.style.display = "none";
+      emptyState.hidden = false;
+      emptyState.textContent = "No games match these filters yet.";
+      if (chart) {
+        chart.data.labels = [];
+        chart.data.datasets = [];
+        chart.update("none");
+      }
       return;
     }
+    canvas.style.display = "";
+    emptyState.hidden = true;
 
     const labels: string[] = [];
     const datasets: any[] = [];
+    let candleGroups: ReturnType<typeof groupCandles> | null = null;
     if (filters.candleMode === "none") {
       labels.push(...chartData.map((point) => point.label));
       datasets.push({
@@ -288,7 +322,8 @@ export function createGraphView(options: GraphViewOptions): GraphView {
         z: 10,
       });
     } else {
-      const groups = groupCandles(chartData, filters.candleMode);
+      const groups = groupCandles(chartData, filters.candleMode, filters.timeframe);
+      candleGroups = groups;
       labels.push(...groups.map((group) => group.label));
       if (filters.metric === "gameCount") {
         datasets.push({
@@ -331,7 +366,7 @@ export function createGraphView(options: GraphViewOptions): GraphView {
       const source =
         filters.candleMode === "none"
           ? chartData.map((point) => point.value)
-          : groupCandles(chartData, filters.candleMode).map((group) =>
+          : (candleGroups || []).map((group) =>
               filters.metric === "gameCount"
                 ? group.count
                 : group.values.reduce((total, value) => total + value, 0) / group.values.length,
@@ -351,8 +386,6 @@ export function createGraphView(options: GraphViewOptions): GraphView {
       });
     }
 
-    const canvas = document.createElement("canvas");
-    canvasHost.appendChild(canvas);
     const context = canvas.getContext("2d");
     if (!context) return;
     const flat = finiteNumbers(
@@ -363,10 +396,9 @@ export function createGraphView(options: GraphViewOptions): GraphView {
       ),
     );
     if (!flat.length) {
-      const empty = document.createElement("div");
-      empty.className = "bgh-graph-empty";
-      empty.textContent = "No numeric data matches these filters.";
-      canvasHost.appendChild(empty);
+      canvas.style.display = "none";
+      emptyState.hidden = false;
+      emptyState.textContent = "No numeric data matches these filters.";
       return;
     }
     let minimum = Math.min(...flat);
@@ -376,10 +408,13 @@ export function createGraphView(options: GraphViewOptions): GraphView {
       maximum = Math.max(maximum, 0.5);
     }
     const padding = maximum - minimum === 0 ? 5 : (maximum - minimum) * 0.1;
+    const isCandle = filters.candleMode !== "none";
     const chartOptions: any = {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       interaction: { intersect: false, mode: "index" },
+      layout: { padding: { left: 10, right: 10 } },
       onClick: (_event: unknown, elements: Array<{ datasetIndex: number; index: number }>) => {
         const element = elements[0];
         if (!element || filters.candleMode !== "none") return;
@@ -398,13 +433,13 @@ export function createGraphView(options: GraphViewOptions): GraphView {
               if (context.dataset.label === "Trend") {
                 return `Trend: ${Number(context.parsed.y).toFixed(1)}`;
               }
-              if (filters.candleMode !== "none") {
+              if (isCandle) {
                 return `${context.dataset.label}: ${context.parsed.y ?? context.parsed._custom}`;
               }
               return `${filters.metric}: ${context.parsed.y}`;
             },
             afterLabel: (context: any) => {
-              if (filters.candleMode !== "none") return "";
+              if (isCandle) return "";
               const point = chartData[context.dataIndex];
               if (!point) return [];
               return [
@@ -420,19 +455,34 @@ export function createGraphView(options: GraphViewOptions): GraphView {
           min: filters.metric === "gameCount" ? 0 : Math.floor(minimum - padding),
           max: Math.ceil(maximum + padding),
           grid: { color: "rgba(255,255,255,.05)" },
-          ticks: { color: "#888" },
+          ticks: { color: "#8b88a0", font: { size: 10 } },
         },
         x: {
+          offset: isCandle || filters.metric === "gameCount",
           grid: { display: false },
-          ticks: { color: "#888", autoSkip: true, maxTicksLimit: 12 },
+          ticks: {
+            color: "#8b88a0",
+            autoSkip: true,
+            maxTicksLimit: 8,
+            maxRotation: 0,
+            padding: 8,
+            font: { size: 10, weight: "600" },
+          },
         },
       },
     };
-    chart = new Chart(context, {
-      type: datasets[0]?.type === "bar" ? "bar" : "line",
-      data: { labels, datasets },
-      options,
-    } as ChartConfiguration);
+    if (!chart) {
+      chart = new Chart(context, {
+        type: "bar",
+        data: { labels, datasets },
+        options: chartOptions,
+      } as ChartConfiguration);
+    } else {
+      chart.data.labels = labels;
+      chart.data.datasets = datasets;
+      (chart as unknown as { options: unknown }).options = chartOptions;
+      chart.update("none");
+    }
   };
 
   const mount = () => {
@@ -475,7 +525,13 @@ export function createGraphView(options: GraphViewOptions): GraphView {
     },
     refresh(nextRecords) {
       records = nextRecords;
-      if (dialog) render();
+      if (!dialog || refreshFrame !== null) return;
+      const run = () => {
+        refreshFrame = null;
+        render();
+      };
+      if (typeof requestAnimationFrame === "function") refreshFrame = requestAnimationFrame(run);
+      else refreshFrame = setTimeout(run, 0) as unknown as number;
     },
     close,
     dispose() {

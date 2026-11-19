@@ -1,4 +1,4 @@
-import { createJsonStore, nextData } from "gg-kit";
+import { API, createJsonStore, nextData, pageWindow } from "gg-kit";
 
 export interface NameEntry {
   nick: string;
@@ -8,6 +8,7 @@ export interface NameEntry {
 export interface NameStore {
   readonly revision: number;
   captureVisitedProfile(): void;
+  resolve(playerIds: readonly string[]): void;
   record(playerId: string | undefined, nick: string | undefined): void;
   nameFor(playerId: string | undefined, fallback?: string): string;
   shortId(playerId: string | undefined): string;
@@ -60,6 +61,12 @@ export function createNameStore(): NameStore {
   const store = createJsonStore<NameMap>({ key: KEY, version: VERSION });
   let names = sanitize(store.get());
   let revision = 0;
+  let disposed = false;
+  let resolving = false;
+  let cooldownUntil = 0;
+  const queue: string[] = [];
+  const queued = new Set<string>();
+  const attempts = new Map<string, number>();
   const listeners = new Set<() => void>();
 
   const notify = () => {
@@ -95,6 +102,68 @@ export function createNameStore(): NameStore {
     notify();
   };
 
+  const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const pump = async () => {
+    if (resolving || disposed) return;
+    resolving = true;
+    try {
+      while (queue.length && !disposed) {
+        const wait = cooldownUntil - Date.now();
+        if (wait > 0) await delay(wait);
+        const playerId = queue.shift();
+        if (!playerId) continue;
+        queued.delete(playerId);
+        if (names[playerId] || (attempts.get(playerId) || 0) >= 2) continue;
+        try {
+          const response = await pageWindow().fetch(`${API.users}${encodeURIComponent(playerId)}`, {
+            credentials: "include",
+          });
+          if (response.status === 429) {
+            const retryAfter = Number(response.headers.get("retry-after")) * 1000;
+            cooldownUntil =
+              Date.now() + (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 30_000);
+            const count = (attempts.get(playerId) || 0) + 1;
+            attempts.set(playerId, count);
+            if (count < 2 && !queued.has(playerId)) {
+              queue.unshift(playerId);
+              queued.add(playerId);
+            }
+            continue;
+          }
+          if (response.ok) {
+            const profile = (await response.json()) as { nick?: unknown };
+            if (typeof profile.nick === "string") record(playerId, profile.nick);
+            else attempts.set(playerId, 2);
+          } else {
+            attempts.set(playerId, 2);
+          }
+        } catch {
+          attempts.set(playerId, (attempts.get(playerId) || 0) + 1);
+        }
+        await delay(1500);
+      }
+    } finally {
+      resolving = false;
+      if (queue.length && !disposed) void pump();
+    }
+  };
+
+  const resolve = (playerIds: readonly string[]) => {
+    for (const playerId of playerIds) {
+      if (
+        !playerId ||
+        names[playerId] ||
+        queued.has(playerId) ||
+        (attempts.get(playerId) || 0) >= 2
+      )
+        continue;
+      queue.push(playerId);
+      queued.add(playerId);
+    }
+    void pump();
+  };
+
   const captureVisitedProfile = () => {
     if (!location.pathname.startsWith("/user/")) return;
     const data = nextData() as {
@@ -113,6 +182,7 @@ export function createNameStore(): NameStore {
       return revision;
     },
     captureVisitedProfile,
+    resolve,
     record,
     shortId,
     nameFor(playerId, fallback) {
@@ -125,6 +195,9 @@ export function createNameStore(): NameStore {
       return () => listeners.delete(listener);
     },
     dispose() {
+      disposed = true;
+      queue.length = 0;
+      queued.clear();
       listeners.clear();
     },
   };
