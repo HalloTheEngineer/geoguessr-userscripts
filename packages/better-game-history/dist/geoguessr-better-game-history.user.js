@@ -18244,9 +18244,20 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       candleMode: config.get("defaultCandleMode")
     };
   }
-  function isInGame(pathname = location.pathname) {
+  var GAME_MAP_SELECTORS = [
+    '[data-qa="guess-map"]',
+    '[data-qa="guess-map-canvas"]',
+    '[class*="guess-map_active__"]',
+    '[class*="guess-map_guessMap__"]'
+  ];
+  function hasGameMap() {
+    return GAME_MAP_SELECTORS.some((selector) => !!document.querySelector(selector));
+  }
+  function isGameSurface(pathname = location.pathname) {
     const kind = pageKind(pathname);
-    return kind === "game" || kind === "duel" || kind === "team-duel";
+    if (kind === "game" || kind === "duel" || kind === "team-duel" || kind === "singleplayer")
+      return true;
+    return hasGameMap();
   }
   startUserscript({
     name: "better-game-history",
@@ -18306,6 +18317,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       let lastRenderSignature = "";
       let renderScheduled = false;
       let renderFrame = null;
+      let lastGameSurface = isGameSurface();
       const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
       function recordNames(details, resolveMissing = false, priorityResolve = false) {
         const unresolved = /* @__PURE__ */ new Set();
@@ -18332,7 +18344,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       }
       function renderNow() {
         if (disposed) return;
-        const visible = !!userId && config.get("enabled") && config.get("showDrawer") && !isInGame();
+        const visible = !!userId && config.get("enabled") && config.get("showDrawer") && !isGameSurface();
         if (visible && !document.body) return;
         const signature = `${visible}|${userId || ""}|${historyRevision}|${gameId() || ""}`;
         if (signature === lastRenderSignature) return;
@@ -18360,7 +18372,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         graph.open(records(), filtersFromConfig());
       }
       function startHydration(generation = workGeneration, signal = workAbort?.signal) {
-        if (hydrationRunning || !userId || !config.get("enabled") || isInGame() || signal?.aborted)
+        if (hydrationRunning || !userId || !config.get("enabled") || isGameSurface() || signal?.aborted)
           return;
         const id = userId;
         hydrationRunning = true;
@@ -18415,7 +18427,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         })();
       }
       function startWork() {
-        if (!userId || !config.get("enabled") || disposed || isInGame()) return;
+        if (!userId || !config.get("enabled") || disposed || isGameSurface()) return;
         stopWork();
         const generation = workGeneration;
         const controller = new AbortController();
@@ -18465,7 +18477,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
             userId = id;
             stopWork();
             renderNow();
-            if (!isInGame()) startWork();
+            if (!isGameSurface()) startWork();
             return;
           }
           renderNow();
@@ -18541,7 +18553,14 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       context.onCleanup(offWs);
       const offDom = onDomChange(() => {
         names2.captureVisitedProfile();
+        const gameSurface = isGameSurface();
+        if (gameSurface !== lastGameSurface) {
+          lastGameSurface = gameSurface;
+          if (gameSurface) stopWork();
+          else if (userId && config.get("enabled")) startWork();
+        }
         if (!userId) void refreshAccount(false, 1500);
+        scheduleRender();
       });
       context.onCleanup(offDom);
       const offHistory = repository.subscribe(() => {
@@ -18582,8 +18601,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       context.onPageHide(() => repository.flush());
       context.onRoute(() => {
         names2.captureVisitedProfile();
+        lastGameSurface = isGameSurface();
         scheduleRender();
-        if (isInGame()) stopWork();
+        if (lastGameSurface) stopWork();
         else if (!workAbort && userId && config.get("enabled")) startWork();
         void refreshAccount(true, 1500);
       });

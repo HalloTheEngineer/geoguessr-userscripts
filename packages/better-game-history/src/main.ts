@@ -82,9 +82,22 @@ function filtersFromConfig(): GraphFilters {
   };
 }
 
-function isInGame(pathname = location.pathname): boolean {
+const GAME_MAP_SELECTORS = [
+  '[data-qa="guess-map"]',
+  '[data-qa="guess-map-canvas"]',
+  '[class*="guess-map_active__"]',
+  '[class*="guess-map_guessMap__"]',
+];
+
+function hasGameMap(): boolean {
+  return GAME_MAP_SELECTORS.some((selector) => !!document.querySelector(selector));
+}
+
+function isGameSurface(pathname = location.pathname): boolean {
   const kind = pageKind(pathname);
-  return kind === "game" || kind === "duel" || kind === "team-duel";
+  if (kind === "game" || kind === "duel" || kind === "team-duel" || kind === "singleplayer")
+    return true;
+  return hasGameMap();
 }
 
 startUserscript({
@@ -146,6 +159,7 @@ startUserscript({
     let lastRenderSignature = "";
     let renderScheduled = false;
     let renderFrame: number | null = null;
+    let lastGameSurface = isGameSurface();
 
     const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
 
@@ -186,7 +200,8 @@ startUserscript({
 
     function renderNow(): void {
       if (disposed) return;
-      const visible = !!userId && config.get("enabled") && config.get("showDrawer") && !isInGame();
+      const visible =
+        !!userId && config.get("enabled") && config.get("showDrawer") && !isGameSurface();
       if (visible && !document.body) return;
       const signature = `${visible}|${userId || ""}|${historyRevision}|${gameId() || ""}`;
       if (signature === lastRenderSignature) return;
@@ -217,7 +232,13 @@ startUserscript({
     }
 
     function startHydration(generation = workGeneration, signal = workAbort?.signal): void {
-      if (hydrationRunning || !userId || !config.get("enabled") || isInGame() || signal?.aborted)
+      if (
+        hydrationRunning ||
+        !userId ||
+        !config.get("enabled") ||
+        isGameSurface() ||
+        signal?.aborted
+      )
         return;
       const id = userId;
       hydrationRunning = true;
@@ -273,7 +294,7 @@ startUserscript({
     }
 
     function startWork(): void {
-      if (!userId || !config.get("enabled") || disposed || isInGame()) return;
+      if (!userId || !config.get("enabled") || disposed || isGameSurface()) return;
       stopWork();
       const generation = workGeneration;
       const controller = new AbortController();
@@ -328,7 +349,7 @@ startUserscript({
           userId = id;
           stopWork();
           renderNow();
-          if (!isInGame()) startWork();
+          if (!isGameSurface()) startWork();
           return;
         }
         renderNow();
@@ -428,7 +449,14 @@ startUserscript({
 
     const offDom = onDomChange(() => {
       names.captureVisitedProfile();
+      const gameSurface = isGameSurface();
+      if (gameSurface !== lastGameSurface) {
+        lastGameSurface = gameSurface;
+        if (gameSurface) stopWork();
+        else if (userId && config.get("enabled")) startWork();
+      }
       if (!userId) void refreshAccount(false, 1500);
+      scheduleRender();
     });
     context.onCleanup(offDom);
 
@@ -475,8 +503,9 @@ startUserscript({
 
     context.onRoute(() => {
       names.captureVisitedProfile();
+      lastGameSurface = isGameSurface();
       scheduleRender();
-      if (isInGame()) stopWork();
+      if (lastGameSurface) stopWork();
       else if (!workAbort && userId && config.get("enabled")) startWork();
       void refreshAccount(true, 1500);
     });

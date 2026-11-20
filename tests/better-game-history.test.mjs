@@ -105,6 +105,15 @@ test("Better Game History mounts account-scoped history and graph access", async
   await new Promise((resolve) => setTimeout(resolve, 120));
   assert.equal(dom.document.querySelector(".bgh-history-row"), row);
 
+  const guessMap = dom.document.createElement("div");
+  guessMap.dataset.qa = "guess-map";
+  dom.document.body.appendChild(guessMap);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(dom.document.getElementById("bgh-history-drawer-root"), null);
+  guessMap.remove();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.ok(dom.document.getElementById("bgh-history-drawer-root"));
+
   dom.window.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "g", altKey: true }));
   assert.ok(dom.document.getElementById("bgh-history-graph"));
   const teamButton = [...dom.document.querySelectorAll(".bgh-graph-filter")].find(
