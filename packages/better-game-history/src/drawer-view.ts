@@ -138,6 +138,8 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
   let scrollArea: HTMLElement | null = null;
   let activeId: string | null = null;
   let visible = false;
+  let pointerInside = false;
+  let focusInside = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   const setOpen = (next: boolean) => {
@@ -165,7 +167,7 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     cancelClose();
     closeTimer = setTimeout(() => {
       closeTimer = null;
-      setOpen(false);
+      if (!pointerInside && !focusInside) setOpen(false);
     }, 450);
   };
 
@@ -188,8 +190,16 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     root
       .querySelector<HTMLButtonElement>("#bgh-show-graph")
       ?.addEventListener("click", options.onGraph);
-    tab?.addEventListener("pointerenter", open);
-    tab?.addEventListener("pointerleave", scheduleClose);
+    const enterPointer = () => {
+      pointerInside = true;
+      open();
+    };
+    const leavePointer = () => {
+      pointerInside = false;
+      scheduleClose();
+    };
+    tab?.addEventListener("pointerenter", enterPointer);
+    tab?.addEventListener("pointerleave", leavePointer);
     tab?.addEventListener("focus", open);
     tab?.addEventListener("click", () => {
       if (root?.classList.contains("bgh-open")) close();
@@ -201,14 +211,23 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
         open();
       }
     });
-    drawer?.addEventListener("pointerenter", open);
-    drawer?.addEventListener("pointerleave", scheduleClose);
-    drawer?.addEventListener("focusin", open);
-    drawer?.addEventListener("focusout", (event) => {
-      if (!root?.contains(event.relatedTarget as Node | null)) scheduleClose();
+    drawer?.addEventListener("pointerenter", enterPointer);
+    drawer?.addEventListener("pointerleave", leavePointer);
+    drawer?.addEventListener("focusin", () => {
+      focusInside = true;
+      open();
     });
     drawer?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
+    });
+    root.addEventListener("focusin", () => {
+      focusInside = true;
+      open();
+    });
+    root.addEventListener("focusout", (event) => {
+      if (root?.contains(event.relatedTarget as Node | null)) return;
+      focusInside = false;
+      scheduleClose();
     });
     const openRow = (row: HTMLElement) => {
       if (!row.dataset.gameId) return;
@@ -281,6 +300,8 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
       visible = next;
       if (!visible) {
         cancelClose();
+        pointerInside = false;
+        focusInside = false;
         root?.remove();
         root = null;
         scrollArea = null;

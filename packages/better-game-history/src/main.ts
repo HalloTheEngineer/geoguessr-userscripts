@@ -149,18 +149,28 @@ startUserscript({
 
     const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
 
-    function recordNames(details: {
-      opponentId?: string;
-      opponent?: string;
-      teamPlayerIds?: string[];
-      teamPlayerNicks?: string[];
-    }): void {
+    function recordNames(
+      details: {
+        opponentId?: string;
+        opponent?: string;
+        teamPlayerIds?: string[];
+        teamPlayerNicks?: string[];
+      },
+      resolveMissing = false,
+      priorityResolve = false,
+    ): void {
+      const unresolved = new Set<string>();
       details.teamPlayerIds?.forEach((playerId, index) => {
         names.record(playerId, details.teamPlayerNicks?.[index]);
+        if (playerId && playerId !== userId) unresolved.add(playerId);
       });
-      if (details.opponentId && details.opponent && !details.opponent.includes(" & ")) {
-        names.record(details.opponentId, details.opponent);
+      if (details.opponentId) {
+        if (details.opponent && !details.opponent.includes(" & ")) {
+          names.record(details.opponentId, details.opponent);
+        }
+        unresolved.add(details.opponentId);
       }
+      if (resolveMissing) names.resolve([...unresolved], priorityResolve);
     }
 
     function stopWork(): void {
@@ -222,7 +232,8 @@ startUserscript({
             const attempts = record.hydration.attempts + 1;
             const now = new Date().toISOString();
             if (result.status === "ok") {
-              recordNames(result.details);
+              const age = Date.now() - new Date(record.time).getTime();
+              recordNames(result.details, age >= 0 && age <= 7 * 86_400_000);
               repository.merge(
                 {
                   ...record,
@@ -408,7 +419,7 @@ startUserscript({
         updatedAt: new Date().toISOString(),
         source: "websocket",
       };
-      recordNames(record);
+      recordNames(record, true, true);
       repository.merge(record, limit());
       scheduleRender();
       startHydration();

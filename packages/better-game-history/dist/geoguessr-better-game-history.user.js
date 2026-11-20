@@ -2227,6 +2227,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     let scrollArea = null;
     let activeId = null;
     let visible = false;
+    let pointerInside = false;
+    let focusInside = false;
     let closeTimer = null;
     const setOpen = (next) => {
       if (!root) return;
@@ -2251,7 +2253,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       cancelClose();
       closeTimer = setTimeout(() => {
         closeTimer = null;
-        setOpen(false);
+        if (!pointerInside && !focusInside) setOpen(false);
       }, 450);
     };
     const mount = () => {
@@ -2271,8 +2273,16 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       const tab = root.querySelector("#bgh-drawer-trigger-tab");
       scrollArea = root.querySelector("#bgh-history-scroll-area");
       root.querySelector("#bgh-show-graph")?.addEventListener("click", options.onGraph);
-      tab?.addEventListener("pointerenter", open);
-      tab?.addEventListener("pointerleave", scheduleClose);
+      const enterPointer = () => {
+        pointerInside = true;
+        open();
+      };
+      const leavePointer = () => {
+        pointerInside = false;
+        scheduleClose();
+      };
+      tab?.addEventListener("pointerenter", enterPointer);
+      tab?.addEventListener("pointerleave", leavePointer);
       tab?.addEventListener("focus", open);
       tab?.addEventListener("click", () => {
         if (root?.classList.contains("bgh-open")) close();
@@ -2284,14 +2294,23 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           open();
         }
       });
-      drawer?.addEventListener("pointerenter", open);
-      drawer?.addEventListener("pointerleave", scheduleClose);
-      drawer?.addEventListener("focusin", open);
-      drawer?.addEventListener("focusout", (event) => {
-        if (!root?.contains(event.relatedTarget)) scheduleClose();
+      drawer?.addEventListener("pointerenter", enterPointer);
+      drawer?.addEventListener("pointerleave", leavePointer);
+      drawer?.addEventListener("focusin", () => {
+        focusInside = true;
+        open();
       });
       drawer?.addEventListener("keydown", (event) => {
         if (event.key === "Escape") close();
+      });
+      root.addEventListener("focusin", () => {
+        focusInside = true;
+        open();
+      });
+      root.addEventListener("focusout", (event) => {
+        if (root?.contains(event.relatedTarget)) return;
+        focusInside = false;
+        scheduleClose();
       });
       const openRow = (row) => {
         if (!row.dataset.gameId) return;
@@ -2360,6 +2379,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         visible = next;
         if (!visible) {
           cancelClose();
+          pointerInside = false;
+          focusInside = false;
           root?.remove();
           root = null;
           scrollArea = null;
@@ -18161,11 +18182,12 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
         if (queue.length && !disposed) void pump();
       }
     };
-    const resolve2 = (playerIds) => {
+    const resolve2 = (playerIds, priority = false) => {
       for (const playerId of playerIds) {
         if (!playerId || names2[playerId] || queued.has(playerId) || (attempts.get(playerId) || 0) >= 2)
           continue;
-        queue.push(playerId);
+        if (priority) queue.unshift(playerId);
+        else queue.push(playerId);
         queued.add(playerId);
       }
       void pump();
@@ -18285,13 +18307,19 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
       let renderScheduled = false;
       let renderFrame = null;
       const limit = () => Math.max(1, Math.floor(config.get("historyLimit")));
-      function recordNames(details) {
+      function recordNames(details, resolveMissing = false, priorityResolve = false) {
+        const unresolved = /* @__PURE__ */ new Set();
         details.teamPlayerIds?.forEach((playerId, index2) => {
           names2.record(playerId, details.teamPlayerNicks?.[index2]);
+          if (playerId && playerId !== userId) unresolved.add(playerId);
         });
-        if (details.opponentId && details.opponent && !details.opponent.includes(" & ")) {
-          names2.record(details.opponentId, details.opponent);
+        if (details.opponentId) {
+          if (details.opponent && !details.opponent.includes(" & ")) {
+            names2.record(details.opponentId, details.opponent);
+          }
+          unresolved.add(details.opponentId);
         }
+        if (resolveMissing) names2.resolve([...unresolved], priorityResolve);
       }
       function stopWork() {
         workGeneration++;
@@ -18347,7 +18375,8 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
               const attempts = record.hydration.attempts + 1;
               const now = (/* @__PURE__ */ new Date()).toISOString();
               if (result.status === "ok") {
-                recordNames(result.details);
+                const age = Date.now() - new Date(record.time).getTime();
+                recordNames(result.details, age >= 0 && age <= 7 * 864e5);
                 repository.merge(
                   {
                     ...record,
@@ -18504,7 +18533,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
           source: "websocket"
         };
-        recordNames(record);
+        recordNames(record, true, true);
         repository.merge(record, limit());
         scheduleRender();
         startHydration();

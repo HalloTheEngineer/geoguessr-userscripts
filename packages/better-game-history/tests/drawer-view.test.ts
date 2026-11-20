@@ -91,3 +91,28 @@ test("drawer hover preserves open state when moving from tab into drawer", async
   assert.equal(root.classList.contains("bgh-open"), false);
   view.dispose();
 });
+
+test("drawer closes after focus leaves the panel", async () => {
+  document.body.innerHTML = "";
+  const view = createDrawerView({
+    onGraph: () => {},
+    onOpenGame: () => {},
+    nameFor: (_id, fallback) => fallback || "Unknown",
+  });
+  view.setVisible(true);
+  const root = document.getElementById("bgh-history-drawer-root");
+  const drawer = document.getElementById("bgh-history-drawer");
+  const tab = document.getElementById("bgh-drawer-trigger-tab");
+  assert.ok(root);
+  assert.ok(drawer);
+  assert.ok(tab);
+
+  tab.dispatchEvent(new dom.FocusEvent("focusin", { bubbles: true }));
+  assert.equal(root.classList.contains("bgh-open"), true);
+  tab.dispatchEvent(
+    new dom.FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(root.classList.contains("bgh-open"), false);
+  view.dispose();
+});

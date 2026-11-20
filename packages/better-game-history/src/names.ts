@@ -8,7 +8,7 @@ export interface NameEntry {
 export interface NameStore {
   readonly revision: number;
   captureVisitedProfile(): void;
-  resolve(playerIds: readonly string[]): void;
+  resolve(playerIds: readonly string[], priority?: boolean): void;
   record(playerId: string | undefined, nick: string | undefined): void;
   nameFor(playerId: string | undefined, fallback?: string): string;
   shortId(playerId: string | undefined): string;
@@ -149,7 +149,7 @@ export function createNameStore(): NameStore {
     }
   };
 
-  const resolve = (playerIds: readonly string[]) => {
+  const resolve = (playerIds: readonly string[], priority = false) => {
     for (const playerId of playerIds) {
       if (
         !playerId ||
@@ -158,7 +158,8 @@ export function createNameStore(): NameStore {
         (attempts.get(playerId) || 0) >= 2
       )
         continue;
-      queue.push(playerId);
+      if (priority) queue.unshift(playerId);
+      else queue.push(playerId);
       queued.add(playerId);
     }
     void pump();
