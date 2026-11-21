@@ -101,17 +101,62 @@ test("drawer closes after focus leaves the panel", async () => {
   });
   view.setVisible(true);
   const root = document.getElementById("bgh-history-drawer-root");
-  const drawer = document.getElementById("bgh-history-drawer");
   const tab = document.getElementById("bgh-drawer-trigger-tab");
   assert.ok(root);
-  assert.ok(drawer);
   assert.ok(tab);
 
-  tab.dispatchEvent(new dom.FocusEvent("focusin", { bubbles: true }));
+  tab.focus();
   assert.equal(root.classList.contains("bgh-open"), true);
-  tab.dispatchEvent(
-    new dom.FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }),
-  );
+  tab.blur();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(root.classList.contains("bgh-open"), false);
+  view.dispose();
+});
+
+test("drawer does not open on hover while the page is unfocused", () => {
+  document.body.innerHTML = "";
+  const view = createDrawerView({
+    onGraph: () => {},
+    onOpenGame: () => {},
+    nameFor: (_id, fallback) => fallback || "Unknown",
+  });
+  view.setVisible(true);
+  const root = document.getElementById("bgh-history-drawer-root");
+  const tab = document.getElementById("bgh-drawer-trigger-tab");
+  assert.ok(root);
+  assert.ok(tab);
+
+  dom.dispatchEvent(new dom.Event("blur"));
+  tab.dispatchEvent(new dom.Event("pointerenter"));
+  assert.equal(root.classList.contains("bgh-open"), false);
+
+  dom.dispatchEvent(new dom.Event("focus"));
+  assert.equal(root.classList.contains("bgh-open"), true);
+  view.dispose();
+});
+
+test("drawer closes when the page loses focus even if the panel held focus", async () => {
+  document.body.innerHTML = "";
+  const view = createDrawerView({
+    onGraph: () => {},
+    onOpenGame: () => {},
+    nameFor: (_id, fallback) => fallback || "Unknown",
+  });
+  view.setVisible(true);
+  const root = document.getElementById("bgh-history-drawer-root");
+  const graphButton = document.getElementById("bgh-show-graph");
+  assert.ok(root);
+  assert.ok(graphButton);
+
+  graphButton.focus();
+  assert.equal(root.classList.contains("bgh-open"), true);
+
+  dom.dispatchEvent(new dom.Event("blur"));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(root.classList.contains("bgh-open"), false);
+  assert.equal(root.contains(document.activeElement), false);
+
+  dom.dispatchEvent(new dom.Event("focus"));
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(root.classList.contains("bgh-open"), false);
   view.dispose();

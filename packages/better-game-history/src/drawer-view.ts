@@ -132,6 +132,9 @@ function rowHtml(
     </div>`;
 }
 
+const HOVER_SELECTOR = "#bgh-drawer-trigger-tab:hover, #bgh-history-drawer:hover";
+const CLOSE_DELAY_MS = 450;
+
 export function createDrawerView(options: DrawerViewOptions): DrawerView {
   const style = injectStyle(STYLE_ID, STYLES);
   let root: HTMLElement | null = null;
@@ -139,22 +142,76 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
   let activeId: string | null = null;
   let visible = false;
   let pointerInside = false;
-  let focusInside = false;
+  // Browsers expose hover through the DOM; the test DOM never matches :hover, so the
+  // tracked pointer state is used until a real hover match proves it is available.
+  let liveHover = false;
+  let windowFocused = typeof document.hasFocus === "function" ? document.hasFocus() : true;
+  let suppressRefresh = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  let detachWindowListeners: (() => void) | null = null;
+
+  const isOpen = () => !!root?.classList.contains("bgh-open");
 
   const setOpen = (next: boolean) => {
     if (!root) return;
+    if (!next) {
+      // A closed drawer is off-screen; keep it from retaining focus, which would make
+      // the panel look focused again the next time the state is evaluated.
+      const active = document.activeElement as HTMLElement | null;
+      if (active && root.contains(active) && typeof active.blur === "function") {
+        suppressRefresh = true;
+        try {
+          active.blur();
+        } finally {
+          suppressRefresh = false;
+        }
+      }
+    }
     root.classList.toggle("bgh-open", next);
     root
       .querySelector<HTMLButtonElement>("#bgh-drawer-trigger-tab")
       ?.setAttribute("aria-expanded", String(next));
   };
+
   const cancelClose = () => {
     if (closeTimer) {
       clearTimeout(closeTimer);
       closeTimer = null;
     }
   };
+
+  const pointerOverPanel = () => {
+    if (!root) return false;
+    if (liveHover) return !!root.querySelector(HOVER_SELECTOR);
+    return pointerInside;
+  };
+
+  const focusWithinPanel = () => {
+    const active = document.activeElement;
+    return !!root && !!active && root.contains(active);
+  };
+
+  const shouldStayOpen = () => windowFocused && (pointerOverPanel() || focusWithinPanel());
+
+  const scheduleClose = () => {
+    cancelClose();
+    if (!isOpen()) return;
+    closeTimer = setTimeout(() => {
+      closeTimer = null;
+      if (!shouldStayOpen()) setOpen(false);
+    }, CLOSE_DELAY_MS);
+  };
+
+  const refreshOpenState = () => {
+    if (!root || suppressRefresh) return;
+    if (shouldStayOpen()) {
+      cancelClose();
+      setOpen(true);
+      return;
+    }
+    scheduleClose();
+  };
+
   const open = () => {
     cancelClose();
     setOpen(true);
@@ -163,16 +220,10 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     cancelClose();
     setOpen(false);
   };
-  const scheduleClose = () => {
-    cancelClose();
-    closeTimer = setTimeout(() => {
-      closeTimer = null;
-      if (!pointerInside && !focusInside) setOpen(false);
-    }, 450);
-  };
 
   const mount = () => {
     if (root || !document.body) return;
+    if (typeof document.hasFocus === "function") windowFocused = document.hasFocus();
     root = document.createElement("div");
     root.id = "bgh-history-drawer-root";
     root.innerHTML = `
@@ -192,17 +243,18 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
       ?.addEventListener("click", options.onGraph);
     const enterPointer = () => {
       pointerInside = true;
-      open();
+      if (!liveHover && root?.querySelector(HOVER_SELECTOR)) liveHover = true;
+      refreshOpenState();
     };
     const leavePointer = () => {
       pointerInside = false;
-      scheduleClose();
+      refreshOpenState();
     };
     tab?.addEventListener("pointerenter", enterPointer);
     tab?.addEventListener("pointerleave", leavePointer);
-    tab?.addEventListener("focus", open);
+    tab?.addEventListener("focus", refreshOpenState);
     tab?.addEventListener("click", () => {
-      if (root?.classList.contains("bgh-open")) close();
+      if (isOpen()) close();
       else open();
     });
     tab?.addEventListener("keydown", (event) => {
@@ -213,22 +265,28 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     });
     drawer?.addEventListener("pointerenter", enterPointer);
     drawer?.addEventListener("pointerleave", leavePointer);
-    drawer?.addEventListener("focusin", () => {
-      focusInside = true;
-      open();
-    });
     drawer?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
-    root.addEventListener("focusin", () => {
-      focusInside = true;
-      open();
-    });
-    root.addEventListener("focusout", (event) => {
-      if (root?.contains(event.relatedTarget as Node | null)) return;
-      focusInside = false;
-      scheduleClose();
-    });
+    root.addEventListener("focusin", refreshOpenState);
+    root.addEventListener("focusout", refreshOpenState);
+    const win = root.ownerDocument?.defaultView;
+    if (win) {
+      const onBlur = () => {
+        windowFocused = false;
+        refreshOpenState();
+      };
+      const onFocus = () => {
+        windowFocused = true;
+        refreshOpenState();
+      };
+      win.addEventListener("blur", onBlur);
+      win.addEventListener("focus", onFocus);
+      detachWindowListeners = () => {
+        win.removeEventListener("blur", onBlur);
+        win.removeEventListener("focus", onFocus);
+      };
+    }
     const openRow = (row: HTMLElement) => {
       if (!row.dataset.gameId) return;
       options.onOpenGame({
@@ -294,26 +352,28 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
     scrollArea.scrollTop = scrollTop;
   };
 
+  const unmount = () => {
+    cancelClose();
+    detachWindowListeners?.();
+    detachWindowListeners = null;
+    pointerInside = false;
+    root?.remove();
+    root = null;
+    scrollArea = null;
+  };
+
   return {
     render,
     setVisible(next) {
       visible = next;
       if (!visible) {
-        cancelClose();
-        pointerInside = false;
-        focusInside = false;
-        root?.remove();
-        root = null;
-        scrollArea = null;
+        unmount();
         return;
       }
       mount();
     },
     dispose() {
-      cancelClose();
-      root?.remove();
-      root = null;
-      scrollArea = null;
+      unmount();
       style?.remove();
     },
   };
