@@ -35,14 +35,18 @@ export const DIRECT_BLOCK_CONFIG: Rule[] = [
   { selector: '[class*="team-matchmaking-layout_footer__"]', category: "multiplayer" },
   { selector: '[class*="ranked-matchmaking-layout_footer__"]', category: "multiplayer" },
   { selector: '[class*="unranked-matchmaking-layout_footer__"]', category: "multiplayer" },
+  { selector: '[class*="_stickyFooter_"]', category: "multiplayer" },
   { selector: '[class*="styles_friendChatButton__"]', category: "inGame" },
+  { selector: '[class*="_friendChatButton_"]', category: "inGame" },
   { selector: '[class*="live-players-count_container__"]', category: "inGame" },
   { selector: '[class*="home_footer__"]', category: "home", url_paths: ["/"] },
   { selector: '[class*="new-losp-footer_root__"]', category: "home", url_paths: ["/"] },
   { selector: '[class*="footer_footer__"]', category: "home", url_paths: ["/"] },
+  { selector: '[class*="_footer_"]', category: "home", url_paths: ["/"] },
   { selector: '[class*="footer_root__"]', category: "multiplayer", url_paths: ["/multiplayer"] },
   { selector: '[class*="home_editButtonWrapper__"]', category: "home" },
   { selector: '[class*="pro-user-start-page_editButtonWrapper__"]', category: "home" },
+  { selector: '[class*="_editButtonWrapper_"]', category: "home" },
   { selector: 'iframe[name="__tcfapiLocator"]', category: "ads" },
   { selector: 'iframe[name="__uspapiLocator"]', category: "ads" },
   { selector: 'iframe[name="__adconsentLocator"]', category: "ads" },
@@ -55,7 +59,7 @@ export const DIRECT_BLOCK_CONFIG: Rule[] = [
 
 export const CSS_HIDING_SELECTORS: Rule[] = [
   {
-    selector: '[class*="home_left__"], [class*="pro-user-start-page_left__"]',
+    selector: '[class*="home_left__"], [class*="pro-user-start-page_left__"], [class*="_left_"]',
     category: "home",
   },
 ];
@@ -71,6 +75,11 @@ export const ANCESTOR_BLOCK_CONFIG: AncestorRule[] = [
     ancestor: '[class*="profile-v2_widgetRow__"]',
     category: "home",
   },
+  {
+    selector: '[class*="_explorer_"]',
+    ancestor: '[class*="_widgetRow_"]',
+    category: "home",
+  },
 ];
 
 export const STRUCTURAL_MAPPINGS: StructuralRule[] = [
@@ -80,11 +89,18 @@ export const STRUCTURAL_MAPPINGS: StructuralRule[] = [
     reverseOrder: true,
     category: "inGame",
   },
+  {
+    source: '[class*="_columnTwo_"]',
+    target: '[class*="_columnOne_"]',
+    reverseOrder: true,
+    category: "inGame",
+  },
 ];
 
 export const HTML_INSERTS: InsertRule[] = [
   {
-    selector: '[class*="home_center__"], [class*="pro-user-start-page_center__"]',
+    selector:
+      '[class*="home_center__"], [class*="pro-user-start-page_center__"], [class*="_center_"]',
     url_paths: ["/"],
     category: "home",
     insertId: "ggb-insert-links",
