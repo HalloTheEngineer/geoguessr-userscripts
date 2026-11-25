@@ -1794,13 +1794,6 @@
         section: "ui",
         order: 22
       },
-      homepageDuelShortcuts: {
-        type: "boolean",
-        default: true,
-        label: "Show duel shortcuts on the home page",
-        section: "ui",
-        order: 23
-      },
       debug: {
         type: "boolean",
         default: false,
@@ -1819,15 +1812,13 @@
     { selector: '[class*="team-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="ranked-matchmaking-layout_footer__"]', category: "multiplayer" },
     { selector: '[class*="unranked-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="_stickyFooter_"]', category: "multiplayer" },
+    { selector: '[class*="_footerEnter_"]', category: "multiplayer" },
     { selector: '[class*="styles_friendChatButton__"]', category: "inGame" },
     { selector: '[class*="_friendChatButton_"]', category: "inGame" },
-    { selector: '[class*="live-players-count_container__"]', category: "inGame" },
     { selector: '[class*="home_footer__"]', category: "home", url_paths: ["/"] },
     { selector: '[class*="new-losp-footer_root__"]', category: "home", url_paths: ["/"] },
     { selector: '[class*="footer_footer__"]', category: "home", url_paths: ["/"] },
     { selector: '[class*="_footer_"]', category: "home", url_paths: ["/"] },
-    { selector: '[class*="footer_root__"]', category: "multiplayer", url_paths: ["/multiplayer"] },
     { selector: '[class*="home_editButtonWrapper__"]', category: "home" },
     { selector: '[class*="pro-user-start-page_editButtonWrapper__"]', category: "home" },
     { selector: '[class*="_editButtonWrapper_"]', category: "home" },
@@ -1847,11 +1838,6 @@
     }
   ];
   var ANCESTOR_BLOCK_CONFIG = [
-    {
-      selector: '[class*="clubs-widget_promo"]',
-      ancestor: '[class*="widget_root"]',
-      category: "home"
-    },
     {
       selector: '[class*="widget_explorer__"]',
       ancestor: '[class*="profile-v2_widgetRow__"]',
@@ -1875,21 +1861,6 @@
       target: '[class*="_columnOne_"]',
       reverseOrder: true,
       category: "inGame"
-    }
-  ];
-  var HTML_INSERTS = [
-    {
-      selector: '[class*="home_center__"], [class*="pro-user-start-page_center__"], [class*="_center_"]',
-      url_paths: ["/"],
-      category: "home",
-      insertId: "ggb-insert-links",
-      position: "beforeend",
-      html: `
-      <div id="ggb-insert-links" style="display:flex;flex-direction:row;gap:1rem;margin-top:1rem;">
-        <a href="/multiplayer" title="Solo duels" style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:1rem;background:rgba(121,82,233,.35);color:#fff;font:800 12px/1 var(--default-font,sans-serif);text-decoration:none;">1v1</a>
-        <a href="/multiplayer/teams" title="Team duels" style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:1rem;background:rgba(121,82,233,.35);color:#fff;font:800 10px/1 var(--default-font,sans-serif);text-decoration:none;">TEAM</a>
-      </div>
-    `
     }
   ];
 
@@ -1960,10 +1931,7 @@
     const selectors = CSS_HIDING_SELECTORS.filter(
       (rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths)
     ).map((rule) => rule.selector);
-    const css = `${selectors.length ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }` : ""}
-       #ggb-insert-links a { transition: transform .2s ease, filter .2s ease; }
-       #ggb-insert-links a:hover { transform: scale(1.05); filter: brightness(1.1); }
-       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }`;
+    const css = `${selectors.length ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }` : ""}`;
     const existing = document.getElementById("geoguessr-adblocker-style");
     if (existing) existing.textContent = css;
     else injectStyle("geoguessr-adblocker-style", css);
@@ -1995,15 +1963,7 @@
     else setTimeout(run, 0);
   }
   function blockElements() {
-    if (!appReady) {
-      if (!adblockerConfig.get("enabled")) {
-        document.getElementById("ggb-insert-links")?.remove();
-      }
-      syncCss();
-      return;
-    }
-    if (!adblockerConfig.get("enabled")) {
-      document.getElementById("ggb-insert-links")?.remove();
+    if (!appReady || !adblockerConfig.get("enabled")) {
       syncCss();
       return;
     }
@@ -2037,18 +1997,6 @@
       source.remove();
       count++;
     }
-    const shortcutsEnabled = adblockerConfig.get("homepageDuelShortcuts") && categoryEnabled("home");
-    if (!shortcutsEnabled) document.getElementById("ggb-insert-links")?.remove();
-    for (const insert of HTML_INSERTS) {
-      if (!shortcutsEnabled || !categoryEnabled(insert.category) || !pathMatches(insert.url_paths))
-        continue;
-      for (const target of document.querySelectorAll(insert.selector)) {
-        if (!target.querySelector(`#${insert.insertId}`)) {
-          target.insertAdjacentHTML(insert.position, insert.html);
-          count++;
-        }
-      }
-    }
     syncCss();
     if (count) log("elements handled", count);
   }
@@ -2070,7 +2018,7 @@
         {
           id: "ui",
           title: "UI cleanup",
-          fields: ["cleanupHome", "cleanupInGame", "cleanupMultiplayer", "homepageDuelShortcuts"]
+          fields: ["cleanupHome", "cleanupInGame", "cleanupMultiplayer"]
         },
         { id: "advanced", title: "Advanced", fields: ["debug"] }
       ]
@@ -2206,7 +2154,6 @@
         stopObserver();
         if (routeTimer) clearTimeout(routeTimer);
         document.getElementById("geoguessr-adblocker-style")?.remove();
-        document.getElementById("ggb-insert-links")?.remove();
       });
     }
   });

@@ -20,7 +20,6 @@ export default {
       "Homepage cleanup",
       "In-game cleanup",
       "Multiplayer cleanup",
-      "Optional duel shortcuts",
     ],
     accent: "#a78bfa",
     order: 10,

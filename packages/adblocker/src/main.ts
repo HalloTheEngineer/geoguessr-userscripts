@@ -7,7 +7,6 @@ import {
   ANCESTOR_BLOCK_CONFIG,
   CSS_HIDING_SELECTORS,
   DIRECT_BLOCK_CONFIG,
-  HTML_INSERTS,
   STRUCTURAL_MAPPINGS,
 } from "./rules.js";
 
@@ -89,10 +88,7 @@ function syncCss(): void {
     selectors.length
       ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }`
       : ""
-  }
-       #ggb-insert-links a { transition: transform .2s ease, filter .2s ease; }
-       #ggb-insert-links a:hover { transform: scale(1.05); filter: brightness(1.1); }
-       .ggb-menu-image { display:block; width:56px; height:56px; object-fit:contain; }`;
+  }`;
   const existing = document.getElementById("geoguessr-adblocker-style");
   if (existing) existing.textContent = css;
   else injectStyle("geoguessr-adblocker-style", css);
@@ -131,15 +127,7 @@ function scheduleBlock(): void {
 }
 
 function blockElements(): void {
-  if (!appReady) {
-    if (!adblockerConfig.get("enabled")) {
-      document.getElementById("ggb-insert-links")?.remove();
-    }
-    syncCss();
-    return;
-  }
-  if (!adblockerConfig.get("enabled")) {
-    document.getElementById("ggb-insert-links")?.remove();
+  if (!appReady || !adblockerConfig.get("enabled")) {
     syncCss();
     return;
   }
@@ -177,18 +165,6 @@ function blockElements(): void {
     count++;
   }
 
-  const shortcutsEnabled = adblockerConfig.get("homepageDuelShortcuts") && categoryEnabled("home");
-  if (!shortcutsEnabled) document.getElementById("ggb-insert-links")?.remove();
-  for (const insert of HTML_INSERTS) {
-    if (!shortcutsEnabled || !categoryEnabled(insert.category) || !pathMatches(insert.url_paths))
-      continue;
-    for (const target of document.querySelectorAll(insert.selector)) {
-      if (!target.querySelector(`#${insert.insertId}`)) {
-        target.insertAdjacentHTML(insert.position, insert.html);
-        count++;
-      }
-    }
-  }
   syncCss();
   if (count) log("elements handled", count);
 }
@@ -213,7 +189,7 @@ startUserscript({
           {
             id: "ui",
             title: "UI cleanup",
-            fields: ["cleanupHome", "cleanupInGame", "cleanupMultiplayer", "homepageDuelShortcuts"],
+            fields: ["cleanupHome", "cleanupInGame", "cleanupMultiplayer"],
           },
           { id: "advanced", title: "Advanced", fields: ["debug"] },
         ],
@@ -361,7 +337,6 @@ startUserscript({
       stopObserver();
       if (routeTimer) clearTimeout(routeTimer);
       document.getElementById("geoguessr-adblocker-style")?.remove();
-      document.getElementById("ggb-insert-links")?.remove();
     });
   },
 });

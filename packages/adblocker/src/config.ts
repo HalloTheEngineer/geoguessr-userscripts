@@ -6,7 +6,6 @@ export interface AdblockerConfig {
   cleanupHome: boolean;
   cleanupInGame: boolean;
   cleanupMultiplayer: boolean;
-  homepageDuelShortcuts: boolean;
   debug: boolean;
 }
 
@@ -50,13 +49,6 @@ export const adblockerConfig = defineConfig<AdblockerConfig>({
       label: "Clean multiplayer UI",
       section: "ui",
       order: 22,
-    },
-    homepageDuelShortcuts: {
-      type: "boolean",
-      default: true,
-      label: "Show duel shortcuts on the home page",
-      section: "ui",
-      order: 23,
     },
     debug: {
       type: "boolean",

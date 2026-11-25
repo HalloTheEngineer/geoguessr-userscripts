@@ -21,7 +21,7 @@ Dev versions use the next patch version with a `-dev` prerelease, for example `2
 
 | Page or action | Expected result | Scripts |
 | --- | --- | --- |
-| Home `/` | Homepage cleanup, duel shortcut links, history drawer | adblocker, PGS |
+| Home `/` | Homepage cleanup, history drawer | adblocker, PGS |
 | Multiplayer | Footer/how-to-play blocks removed, no layout damage | adblocker |
 | Standard game | Case button, gamble, settings tab | GeoGamble, adblocker |
 | In-game settings | Shared **Userscripts** tab shows AdBlocker, GeoGamble, GeoSurfer, Match Notifier, and Game Summary sub-tabs; only the active script renders; section cards have clear spacing | all |
