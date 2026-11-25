@@ -14,11 +14,21 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     required: true,
   },
   "game.settingsRoot": {
-    any: ['[class*="game-menu_settingsContainer__"]', '[data-qa="game-settings"]'],
+    any: [
+      '[class*="game-menu_settingsContainer__"]',
+      '[data-qa="game-settings"]',
+      '[class*="_inGameMenuContentWrapper_"]',
+      '[class*="_inGameMenuOverlay_"]',
+    ],
     description: "Native in-game settings container",
   },
   "game.settingsOptions": {
-    any: ['[class*="game-menu_optionsContainer__"]', '[class*="game-menu_options"]'],
+    any: [
+      '[class*="game-menu_optionsContainer__"]',
+      '[class*="game-menu_options"]',
+      '[class*="_panelBody_"]',
+      '[class*="_sectionBody_"]',
+    ],
     description: "Native in-game settings options list",
   },
   "game.settingsVolume": {
@@ -26,11 +36,11 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     description: "Native volume slider row",
   },
   "game.settingsSubHeader": {
-    any: ['[class*="game-menu_subHeader__"]'],
+    any: ['[class*="game-menu_subHeader__"]', '[class*="_subHeader_"]'],
     description: "Native settings sub-header",
   },
   "game.hudButton": {
-    any: ['[class*="styles_hudButton__"]'],
+    any: ['[class*="styles_hudButton__"]', '[class*="_hudButton_"]'],
     description: "Native round HUD button",
   },
   "game.menuRow": {
@@ -38,11 +48,11 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     description: "Native settings row",
   },
   "game.menuDivider": {
-    any: ['[class*="game-menu_divider__"]'],
+    any: ['[class*="game-menu_divider__"]', '[class*="_divider_"]'],
     description: "Native settings divider",
   },
   "game.menuToggle": {
-    any: ['[class*="toggle_toggle__"]'],
+    any: ['[class*="toggle_toggle__"]', '[class*="_toggle_"]'],
     description: "Native settings toggle",
   },
   "game.menuRange": {
@@ -58,7 +68,11 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     description: "Guess map wrapper",
   },
   "guessMap.canvas": {
-    any: ['[data-qa="guess-map-canvas"]', '[class*="guess-map_canvas__"]'],
+    any: [
+      '[data-qa="guess-map-canvas"]',
+      '[class*="guess-map_canvas__"]',
+      '[class*="_mapCanvas_"]',
+    ],
     description: "Guess map canvas",
   },
   "guessMap.submit": {
@@ -66,15 +80,19 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     description: "Guess submit button",
   },
   "guessMap.active": {
-    any: ['[class*="guess-map_active__"]', '[class*="guess-map_guessMap__"]'],
+    any: [
+      '[class*="guess-map_active__"]',
+      '[class*="guess-map_guessMap__"]',
+      '[class*="_guessMap_"]',
+    ],
     description: "Expanded guess map",
   },
   "profile.widgetRow": {
-    any: ['[class*="profile-v2_widgetRow__"]'],
+    any: ['[class*="profile-v2_widgetRow__"]', '[class*="_widgetRow_"]'],
     description: "Profile widget row",
   },
   "duel.summaryRound": {
-    any: ['[class*="game-summary_playedRound__"]'],
+    any: ['[class*="game-summary_playedRound__"]', '[class*="_playedRound_"]'],
     description: "Duel summary round",
   },
 };

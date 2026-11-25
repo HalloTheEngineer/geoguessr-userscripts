@@ -55,8 +55,21 @@ export function siteBuild(): string | null {
     if (isBuildId(match?.[1])) return match[1];
   }
 
+  // The current SPA ships a hashed entry bundle instead of a Next.js build manifest.
+  for (const script of document.querySelectorAll<HTMLScriptElement>('script[src*="/_start/"]')) {
+    const match = script.src.match(/\/index-([A-Za-z0-9_-]{4,})\.js(?:\?|$)/);
+    if (isBuildId(match?.[1])) return match[1];
+  }
+
   return null;
 }
+
+interface ProfileResponse {
+  payload?: { user?: { id?: string; userId?: string } };
+  user?: { id?: string; userId?: string };
+}
+
+let fetchedUserId: string | null = null;
 
 export function currentUserId(): string | null {
   const data = nextData();
@@ -64,7 +77,32 @@ export function currentUserId(): string | null {
   if (userId) return userId;
   const win = pageWindow() as unknown as { __NEXT_DATA__?: NextData };
   const direct = win.__NEXT_DATA__?.props?.accountProps?.account?.user?.userId;
-  return direct || null;
+  return direct || fetchedUserId || null;
+}
+
+/**
+ * Legacy pages exposed the account through __NEXT_DATA__. The current SPA boots from
+ * /api/v3/profiles/ instead, so ask the site for the signed-in profile.
+ */
+export async function fetchCurrentUserId(signal?: AbortSignal): Promise<string | null> {
+  if (!hasDom()) return null;
+  if (fetchedUserId) return fetchedUserId;
+  try {
+    const response = await pageWindow().fetch("/api/v3/profiles/", {
+      credentials: "include",
+      headers: { accept: "application/json" },
+      signal,
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as ProfileResponse | null;
+    const user = body?.payload?.user ?? body?.user;
+    const id = user?.id || user?.userId;
+    if (typeof id !== "string" || !id) return null;
+    fetchedUserId = id;
+    return id;
+  } catch {
+    return null;
+  }
 }
 
 export interface WaitForCurrentUserIdOptions {
@@ -98,13 +136,26 @@ export function waitForCurrentUserId(
       resolve(value);
     };
     const onAbort = () => finish(null);
+    let fetching = false;
+    let lastFetch = 0;
+    let fetchAttempts = 0;
     const check = () => {
       const value = currentUserId();
       if (value) {
         finish(value);
         return;
       }
-      if (Date.now() >= deadline) finish(null);
+      // A signed-out page answers 401, so stop retrying quickly instead of polling.
+      if (!fetching && fetchAttempts < 3 && Date.now() - lastFetch >= 1000) {
+        lastFetch = Date.now();
+        fetchAttempts++;
+        fetching = true;
+        void fetchCurrentUserId(options.signal).then((id) => {
+          fetching = false;
+          if (id) finish(id);
+        });
+      }
+      if (Date.now() >= deadline) finish(currentUserId());
     };
 
     options.signal?.addEventListener("abort", onAbort, { once: true });

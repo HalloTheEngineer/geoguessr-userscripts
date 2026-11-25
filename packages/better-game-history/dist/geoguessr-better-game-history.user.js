@@ -76,15 +76,40 @@
       );
       if (isBuildId(match?.[1])) return match[1];
     }
+    for (const script of document.querySelectorAll('script[src*="/_start/"]')) {
+      const match = script.src.match(/\/index-([A-Za-z0-9_-]{4,})\.js(?:\?|$)/);
+      if (isBuildId(match?.[1])) return match[1];
+    }
     return null;
   }
+  var fetchedUserId = null;
   function currentUserId() {
     const data = nextData();
     const userId = data?.props?.accountProps?.account?.user?.userId || null;
     if (userId) return userId;
     const win = pageWindow();
     const direct = win.__NEXT_DATA__?.props?.accountProps?.account?.user?.userId;
-    return direct || null;
+    return direct || fetchedUserId || null;
+  }
+  async function fetchCurrentUserId(signal) {
+    if (!hasDom()) return null;
+    if (fetchedUserId) return fetchedUserId;
+    try {
+      const response = await pageWindow().fetch("/api/v3/profiles/", {
+        credentials: "include",
+        headers: { accept: "application/json" },
+        signal
+      });
+      if (!response.ok) return null;
+      const body = await response.json();
+      const user = body?.payload?.user ?? body?.user;
+      const id = user?.id || user?.userId;
+      if (typeof id !== "string" || !id) return null;
+      fetchedUserId = id;
+      return id;
+    } catch {
+      return null;
+    }
   }
   function waitForCurrentUserId(options = {}) {
     const existing = currentUserId();
@@ -107,13 +132,25 @@
         resolve2(value);
       };
       const onAbort = () => finish(null);
+      let fetching = false;
+      let lastFetch = 0;
+      let fetchAttempts = 0;
       const check = () => {
         const value = currentUserId();
         if (value) {
           finish(value);
           return;
         }
-        if (Date.now() >= deadline) finish(null);
+        if (!fetching && fetchAttempts < 3 && Date.now() - lastFetch >= 1e3) {
+          lastFetch = Date.now();
+          fetchAttempts++;
+          fetching = true;
+          void fetchCurrentUserId(options.signal).then((id) => {
+            fetching = false;
+            if (id) finish(id);
+          });
+        }
+        if (Date.now() >= deadline) finish(currentUserId());
       };
       options.signal?.addEventListener("abort", onAbort, { once: true });
       interval = setInterval(check, intervalMs);
@@ -273,11 +310,21 @@
       required: true
     },
     "game.settingsRoot": {
-      any: ['[class*="game-menu_settingsContainer__"]', '[data-qa="game-settings"]'],
+      any: [
+        '[class*="game-menu_settingsContainer__"]',
+        '[data-qa="game-settings"]',
+        '[class*="_inGameMenuContentWrapper_"]',
+        '[class*="_inGameMenuOverlay_"]'
+      ],
       description: "Native in-game settings container"
     },
     "game.settingsOptions": {
-      any: ['[class*="game-menu_optionsContainer__"]', '[class*="game-menu_options"]'],
+      any: [
+        '[class*="game-menu_optionsContainer__"]',
+        '[class*="game-menu_options"]',
+        '[class*="_panelBody_"]',
+        '[class*="_sectionBody_"]'
+      ],
       description: "Native in-game settings options list"
     },
     "game.settingsVolume": {
@@ -285,11 +332,11 @@
       description: "Native volume slider row"
     },
     "game.settingsSubHeader": {
-      any: ['[class*="game-menu_subHeader__"]'],
+      any: ['[class*="game-menu_subHeader__"]', '[class*="_subHeader_"]'],
       description: "Native settings sub-header"
     },
     "game.hudButton": {
-      any: ['[class*="styles_hudButton__"]'],
+      any: ['[class*="styles_hudButton__"]', '[class*="_hudButton_"]'],
       description: "Native round HUD button"
     },
     "game.menuRow": {
@@ -297,11 +344,11 @@
       description: "Native settings row"
     },
     "game.menuDivider": {
-      any: ['[class*="game-menu_divider__"]'],
+      any: ['[class*="game-menu_divider__"]', '[class*="_divider_"]'],
       description: "Native settings divider"
     },
     "game.menuToggle": {
-      any: ['[class*="toggle_toggle__"]'],
+      any: ['[class*="toggle_toggle__"]', '[class*="_toggle_"]'],
       description: "Native settings toggle"
     },
     "game.menuRange": {
@@ -317,7 +364,11 @@
       description: "Guess map wrapper"
     },
     "guessMap.canvas": {
-      any: ['[data-qa="guess-map-canvas"]', '[class*="guess-map_canvas__"]'],
+      any: [
+        '[data-qa="guess-map-canvas"]',
+        '[class*="guess-map_canvas__"]',
+        '[class*="_mapCanvas_"]'
+      ],
       description: "Guess map canvas"
     },
     "guessMap.submit": {
@@ -325,15 +376,19 @@
       description: "Guess submit button"
     },
     "guessMap.active": {
-      any: ['[class*="guess-map_active__"]', '[class*="guess-map_guessMap__"]'],
+      any: [
+        '[class*="guess-map_active__"]',
+        '[class*="guess-map_guessMap__"]',
+        '[class*="_guessMap_"]'
+      ],
       description: "Expanded guess map"
     },
     "profile.widgetRow": {
-      any: ['[class*="profile-v2_widgetRow__"]'],
+      any: ['[class*="profile-v2_widgetRow__"]', '[class*="_widgetRow_"]'],
       description: "Profile widget row"
     },
     "duel.summaryRound": {
-      any: ['[class*="game-summary_playedRound__"]'],
+      any: ['[class*="game-summary_playedRound__"]', '[class*="_playedRound_"]'],
       description: "Duel summary round"
     }
   };
@@ -18305,7 +18360,9 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     '[data-qa="guess-map"]',
     '[data-qa="guess-map-canvas"]',
     '[class*="guess-map_active__"]',
-    '[class*="guess-map_guessMap__"]'
+    '[class*="guess-map_guessMap__"]',
+    '[class*="_guessMap_"]',
+    '[class*="_mapCanvas_"]'
   ];
   function hasGameMap() {
     return GAME_MAP_SELECTORS.some((selector) => !!document.querySelector(selector));

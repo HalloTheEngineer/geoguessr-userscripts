@@ -80,7 +80,8 @@ import {
   let staticHookInstalled = false;
   let audioContext = null;
   let masterGain = null;
-  const GUESS_MAP_CANVAS_SELECTORS = '[data-qa="guess-map-canvas"], [class*="guess-map_canvas"]';
+  const GUESS_MAP_CANVAS_SELECTORS =
+    '[data-qa="guess-map-canvas"], [class*="guess-map_canvas"], [class*="_mapCanvas_"]';
 
   let applyingFromStore = false;
 

@@ -82,6 +82,10 @@
       );
       if (isBuildId(match?.[1])) return match[1];
     }
+    for (const script of document.querySelectorAll('script[src*="/_start/"]')) {
+      const match = script.src.match(/\/index-([A-Za-z0-9_-]{4,})\.js(?:\?|$)/);
+      if (isBuildId(match?.[1])) return match[1];
+    }
     return null;
   }
   function pageKind(pathname = location.pathname) {
@@ -215,11 +219,21 @@
       required: true
     },
     "game.settingsRoot": {
-      any: ['[class*="game-menu_settingsContainer__"]', '[data-qa="game-settings"]'],
+      any: [
+        '[class*="game-menu_settingsContainer__"]',
+        '[data-qa="game-settings"]',
+        '[class*="_inGameMenuContentWrapper_"]',
+        '[class*="_inGameMenuOverlay_"]'
+      ],
       description: "Native in-game settings container"
     },
     "game.settingsOptions": {
-      any: ['[class*="game-menu_optionsContainer__"]', '[class*="game-menu_options"]'],
+      any: [
+        '[class*="game-menu_optionsContainer__"]',
+        '[class*="game-menu_options"]',
+        '[class*="_panelBody_"]',
+        '[class*="_sectionBody_"]'
+      ],
       description: "Native in-game settings options list"
     },
     "game.settingsVolume": {
@@ -227,11 +241,11 @@
       description: "Native volume slider row"
     },
     "game.settingsSubHeader": {
-      any: ['[class*="game-menu_subHeader__"]'],
+      any: ['[class*="game-menu_subHeader__"]', '[class*="_subHeader_"]'],
       description: "Native settings sub-header"
     },
     "game.hudButton": {
-      any: ['[class*="styles_hudButton__"]'],
+      any: ['[class*="styles_hudButton__"]', '[class*="_hudButton_"]'],
       description: "Native round HUD button"
     },
     "game.menuRow": {
@@ -239,11 +253,11 @@
       description: "Native settings row"
     },
     "game.menuDivider": {
-      any: ['[class*="game-menu_divider__"]'],
+      any: ['[class*="game-menu_divider__"]', '[class*="_divider_"]'],
       description: "Native settings divider"
     },
     "game.menuToggle": {
-      any: ['[class*="toggle_toggle__"]'],
+      any: ['[class*="toggle_toggle__"]', '[class*="_toggle_"]'],
       description: "Native settings toggle"
     },
     "game.menuRange": {
@@ -259,7 +273,11 @@
       description: "Guess map wrapper"
     },
     "guessMap.canvas": {
-      any: ['[data-qa="guess-map-canvas"]', '[class*="guess-map_canvas__"]'],
+      any: [
+        '[data-qa="guess-map-canvas"]',
+        '[class*="guess-map_canvas__"]',
+        '[class*="_mapCanvas_"]'
+      ],
       description: "Guess map canvas"
     },
     "guessMap.submit": {
@@ -267,15 +285,19 @@
       description: "Guess submit button"
     },
     "guessMap.active": {
-      any: ['[class*="guess-map_active__"]', '[class*="guess-map_guessMap__"]'],
+      any: [
+        '[class*="guess-map_active__"]',
+        '[class*="guess-map_guessMap__"]',
+        '[class*="_guessMap_"]'
+      ],
       description: "Expanded guess map"
     },
     "profile.widgetRow": {
-      any: ['[class*="profile-v2_widgetRow__"]'],
+      any: ['[class*="profile-v2_widgetRow__"]', '[class*="_widgetRow_"]'],
       description: "Profile widget row"
     },
     "duel.summaryRound": {
-      any: ['[class*="game-summary_playedRound__"]'],
+      any: ['[class*="game-summary_playedRound__"]', '[class*="_playedRound_"]'],
       description: "Duel summary round"
     }
   };
@@ -4640,7 +4662,7 @@
     let staticHookInstalled = false;
     let audioContext = null;
     let masterGain = null;
-    const GUESS_MAP_CANVAS_SELECTORS = '[data-qa="guess-map-canvas"], [class*="guess-map_canvas"]';
+    const GUESS_MAP_CANVAS_SELECTORS = '[data-qa="guess-map-canvas"], [class*="guess-map_canvas"], [class*="_mapCanvas_"]';
     let applyingFromStore = false;
     function applyResolved(trackedKeys) {
       const next = resolveConfig(CONFIG, COUNTRY_DATA);
