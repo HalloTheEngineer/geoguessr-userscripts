@@ -116,7 +116,7 @@ test("checkSiteBuild ignores a legacy invalid build value", () => {
     const result = kit.checkSiteBuild();
     assert.equal(result.changed, false);
     assert.equal(result.previous, null);
-    assert.equal(localStorage.getItem("gg-kit.last-site-build"), "1.9087-481401b");
+    assert.equal(localStorage.getItem("gg-kit.last-site-build"), "next:1.9087-481401b");
     assert.deepEqual(warnings, []);
   } finally {
     console.warn = originalWarn;
@@ -124,7 +124,7 @@ test("checkSiteBuild ignores a legacy invalid build value", () => {
 });
 
 test("checkSiteBuild warns once for a real build change", () => {
-  localStorage.setItem("gg-kit.last-site-build", "1.9000-old");
+  localStorage.setItem("gg-kit.last-site-build", "next:1.9000-old");
   document.head.innerHTML =
     '<script id="__NEXT_DATA__" type="application/json">{"buildId":"1.9087-481401b"}</script>';
   const warnings = [];

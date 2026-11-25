@@ -37,14 +37,27 @@ export function nextData(): NextData | null {
   return value;
 }
 
-export function siteBuild(): string | null {
+export type SiteBuildScheme = "next" | "spa";
+
+export interface SiteBuildInfo {
+  build: string;
+  scheme: SiteBuildScheme;
+}
+
+/**
+ * The build fingerprint changed meaning when the site moved off Next.js, so the
+ * scheme is reported alongside it. Build ids are only comparable within a scheme.
+ */
+export function siteBuildInfo(): SiteBuildInfo | null {
   const data = nextData();
-  if (isBuildId(data?.buildId)) return data.buildId;
+  if (isBuildId(data?.buildId)) return { build: data.buildId, scheme: "next" };
 
   if (!hasDom()) return null;
 
   const win = pageWindow() as unknown as { __NEXT_DATA__?: NextData };
-  if (isBuildId(win.__NEXT_DATA__?.buildId)) return win.__NEXT_DATA__!.buildId!;
+  if (isBuildId(win.__NEXT_DATA__?.buildId)) {
+    return { build: win.__NEXT_DATA__!.buildId!, scheme: "next" };
+  }
 
   for (const script of document.querySelectorAll<HTMLScriptElement>(
     'script[src*="/_next/static/"]',
@@ -52,16 +65,20 @@ export function siteBuild(): string | null {
     const match = script.src.match(
       /\/_next\/static\/([^/]+)\/(?:_buildManifest|_ssgManifest|_middlewareManifest|_clientMiddlewareManifest)\.js(?:\?|$)/,
     );
-    if (isBuildId(match?.[1])) return match[1];
+    if (isBuildId(match?.[1])) return { build: match[1], scheme: "next" };
   }
 
   // The current SPA ships a hashed entry bundle instead of a Next.js build manifest.
   for (const script of document.querySelectorAll<HTMLScriptElement>('script[src*="/_start/"]')) {
     const match = script.src.match(/\/index-([A-Za-z0-9_-]{4,})\.js(?:\?|$)/);
-    if (isBuildId(match?.[1])) return match[1];
+    if (isBuildId(match?.[1])) return { build: match[1], scheme: "spa" };
   }
 
   return null;
+}
+
+export function siteBuild(): string | null {
+  return siteBuildInfo()?.build ?? null;
 }
 
 interface ProfileResponse {

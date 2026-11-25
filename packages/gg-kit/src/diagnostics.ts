@@ -1,4 +1,4 @@
-import { isBuildId, pageKind, siteBuild } from "./page.js";
+import { isBuildId, pageKind, type SiteBuildScheme, siteBuild, siteBuildInfo } from "./page.js";
 import { health, type SelectorHealth } from "./selectors.js";
 import { hasDom, pageWindow } from "./window.js";
 
@@ -17,6 +17,25 @@ interface Registry {
 const KEY = "__GG_KIT_DIAGNOSTICS__";
 const API_VERSION = 1;
 const BUILD_KEY = "gg-kit.last-site-build";
+const BUILD_SCHEMES: SiteBuildScheme[] = ["next", "spa"];
+
+interface StoredBuild {
+  build: string | null;
+  scheme: SiteBuildScheme | "legacy" | null;
+}
+
+function decodeBuild(stored: string | null): StoredBuild {
+  if (!stored) return { build: null, scheme: null };
+  const separator = stored.indexOf(":");
+  if (separator > 0) {
+    const scheme = stored.slice(0, separator) as SiteBuildScheme;
+    const value = stored.slice(separator + 1);
+    if (BUILD_SCHEMES.includes(scheme) && isBuildId(value)) return { build: value, scheme };
+    return { build: null, scheme: "legacy" };
+  }
+  // Values written before the scheme was recorded cannot be compared across shapes.
+  return { build: isBuildId(stored) ? stored : null, scheme: "legacy" };
+}
 
 function registry(): Registry {
   const win = pageWindow() as unknown as Record<string, Registry | undefined>;
@@ -46,25 +65,27 @@ export function checkSiteBuild(): {
   changed: boolean;
   previous: string | null;
 } {
-  const build = siteBuild();
-  if (!build || !hasDom()) return { build, changed: false, previous: null };
-  let previous: string | null = null;
+  const info = siteBuildInfo();
+  if (!info || !hasDom()) {
+    return { build: info?.build ?? null, changed: false, previous: null };
+  }
+  let previous: StoredBuild = { build: null, scheme: null };
   try {
-    const stored = localStorage.getItem(BUILD_KEY);
-    previous = isBuildId(stored) ? stored : null;
-    localStorage.setItem(BUILD_KEY, build);
+    previous = decodeBuild(localStorage.getItem(BUILD_KEY));
+    localStorage.setItem(BUILD_KEY, `${info.scheme}:${info.build}`);
   } catch {
     // storage unavailable
   }
   const state = registry();
-  const changed = !!previous && previous !== build;
+  const changed =
+    !!previous.build && previous.build !== info.build && previous.scheme === info.scheme;
   if (changed && !state.buildWarned) {
     state.buildWarned = true;
     console.warn(
-      `[gg-kit] GeoGuessr build changed (${previous} -> ${build}); selectors may need updating`,
+      `[gg-kit] GeoGuessr build changed (${previous.build} -> ${info.build}); selectors may need updating`,
     );
   }
-  return { build, changed, previous };
+  return { build: info.build, changed, previous: previous.build };
 }
 
 export interface DiagnosticsReport {

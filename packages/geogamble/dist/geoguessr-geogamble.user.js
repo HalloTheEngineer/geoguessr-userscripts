@@ -68,25 +68,30 @@
     cachedNextData = { build: key, value };
     return value;
   }
-  function siteBuild() {
+  function siteBuildInfo() {
     const data = nextData();
-    if (isBuildId(data?.buildId)) return data.buildId;
+    if (isBuildId(data?.buildId)) return { build: data.buildId, scheme: "next" };
     if (!hasDom()) return null;
     const win = pageWindow();
-    if (isBuildId(win.__NEXT_DATA__?.buildId)) return win.__NEXT_DATA__.buildId;
+    if (isBuildId(win.__NEXT_DATA__?.buildId)) {
+      return { build: win.__NEXT_DATA__.buildId, scheme: "next" };
+    }
     for (const script of document.querySelectorAll(
       'script[src*="/_next/static/"]'
     )) {
       const match = script.src.match(
         /\/_next\/static\/([^/]+)\/(?:_buildManifest|_ssgManifest|_middlewareManifest|_clientMiddlewareManifest)\.js(?:\?|$)/
       );
-      if (isBuildId(match?.[1])) return match[1];
+      if (isBuildId(match?.[1])) return { build: match[1], scheme: "next" };
     }
     for (const script of document.querySelectorAll('script[src*="/_start/"]')) {
       const match = script.src.match(/\/index-([A-Za-z0-9_-]{4,})\.js(?:\?|$)/);
-      if (isBuildId(match?.[1])) return match[1];
+      if (isBuildId(match?.[1])) return { build: match[1], scheme: "spa" };
     }
     return null;
+  }
+  function siteBuild() {
+    return siteBuildInfo()?.build ?? null;
   }
   function pageKind(pathname = location.pathname) {
     if (pathname === "/" || pathname === "") return "home";
@@ -329,6 +334,18 @@
   var KEY2 = "__GG_KIT_DIAGNOSTICS__";
   var API_VERSION2 = 1;
   var BUILD_KEY = "gg-kit.last-site-build";
+  var BUILD_SCHEMES = ["next", "spa"];
+  function decodeBuild(stored) {
+    if (!stored) return { build: null, scheme: null };
+    const separator = stored.indexOf(":");
+    if (separator > 0) {
+      const scheme = stored.slice(0, separator);
+      const value = stored.slice(separator + 1);
+      if (BUILD_SCHEMES.includes(scheme) && isBuildId(value)) return { build: value, scheme };
+      return { build: null, scheme: "legacy" };
+    }
+    return { build: isBuildId(stored) ? stored : null, scheme: "legacy" };
+  }
   function registry() {
     const win = pageWindow();
     if (win[KEY2]) {
@@ -351,24 +368,25 @@
     registry().scripts.set(name, { name, version, loadedAt: (/* @__PURE__ */ new Date()).toISOString() });
   }
   function checkSiteBuild() {
-    const build = siteBuild();
-    if (!build || !hasDom()) return { build, changed: false, previous: null };
-    let previous = null;
+    const info = siteBuildInfo();
+    if (!info || !hasDom()) {
+      return { build: info?.build ?? null, changed: false, previous: null };
+    }
+    let previous = { build: null, scheme: null };
     try {
-      const stored = localStorage.getItem(BUILD_KEY);
-      previous = isBuildId(stored) ? stored : null;
-      localStorage.setItem(BUILD_KEY, build);
+      previous = decodeBuild(localStorage.getItem(BUILD_KEY));
+      localStorage.setItem(BUILD_KEY, `${info.scheme}:${info.build}`);
     } catch {
     }
     const state3 = registry();
-    const changed = !!previous && previous !== build;
+    const changed = !!previous.build && previous.build !== info.build && previous.scheme === info.scheme;
     if (changed && !state3.buildWarned) {
       state3.buildWarned = true;
       console.warn(
-        `[gg-kit] GeoGuessr build changed (${previous} -> ${build}); selectors may need updating`
+        `[gg-kit] GeoGuessr build changed (${previous.build} -> ${info.build}); selectors may need updating`
       );
     }
-    return { build, changed, previous };
+    return { build: info.build, changed, previous: previous.build };
   }
   function report() {
     const selectors = hasDom() ? health() : [];
