@@ -55,6 +55,16 @@ export const CSS_HIDING_SELECTORS: Rule[] = [
 
 export const ANCESTOR_BLOCK_CONFIG: AncestorRule[] = [
   {
+    selector: '[class*="_friendIcon_"]',
+    ancestor: '[class*="_contacts_"]',
+    category: "inGame",
+  },
+  {
+    selector: '[data-qa="pano-zoom-in"]',
+    ancestor: '[class*="_controlGroup_"]',
+    category: "inGame",
+  },
+  {
     selector: '[class*="widget_explorer__"]',
     ancestor: '[class*="profile-v2_widgetRow__"]',
     category: "home",
@@ -77,6 +87,12 @@ export const STRUCTURAL_MAPPINGS: StructuralRule[] = [
     source: '[class*="_columnTwo_"]',
     target: '[class*="_columnOne_"]',
     reverseOrder: true,
+    category: "inGame",
+  },
+  {
+    source: '[class*="_chatInput_"]',
+    target: '[class*="_columnOne_"]',
+    reverseOrder: false,
     category: "inGame",
   },
 ];

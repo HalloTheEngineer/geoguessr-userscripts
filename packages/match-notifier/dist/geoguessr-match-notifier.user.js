@@ -274,7 +274,7 @@
       description: "Native button"
     },
     "guessMap.root": {
-      any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]', "[data-game-hud]"],
+      any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]'],
       description: "Guess map wrapper"
     },
     "guessMap.canvas": {

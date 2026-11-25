@@ -371,7 +371,7 @@
       description: "Native button"
     },
     "guessMap.root": {
-      any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]', "[data-game-hud]"],
+      any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]'],
       description: "Guess map wrapper"
     },
     "guessMap.canvas": {
@@ -2464,16 +2464,25 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
           win.removeEventListener("focus", onFocus);
         };
       }
+      const releaseFocus = () => {
+        const active = document.activeElement;
+        if (!active || !root?.contains(active) || typeof active.blur !== "function") return;
+        active.blur();
+      };
       const openRow = (row) => {
         if (!row.dataset.gameId) return;
         options.onOpenGame({
           gameId: row.dataset.gameId,
           isTeamDuel: row.dataset.team === "1"
         });
+        releaseFocus();
       };
       scrollArea?.addEventListener("click", (event) => {
         const target = event.target;
-        if (target?.closest("a")) return;
+        if (target?.closest("a")) {
+          releaseFocus();
+          return;
+        }
         const row = target?.closest("[data-game-id]");
         if (row) openRow(row);
       });
@@ -18404,8 +18413,7 @@ a.bgh-history-opponent:hover { text-decoration: underline; }
     '[class*="guess-map_guessMap__"]',
     '[class*="_guessMap_"]',
     '[class*="_mapCanvas_"]',
-    '[class*="_gameLayout_"]',
-    "[data-game-hud]"
+    '[class*="_gameLayout_"]'
   ];
   function hasGameMap() {
     return GAME_MAP_SELECTORS.some((selector) => !!document.querySelector(selector));

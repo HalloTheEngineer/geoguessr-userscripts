@@ -287,16 +287,27 @@ export function createDrawerView(options: DrawerViewOptions): DrawerView {
         win.removeEventListener("focus", onFocus);
       };
     }
+    // Opening a game leaves the clicked row or link focused, which would keep the
+    // hover-driven drawer open after the pointer leaves.
+    const releaseFocus = () => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !root?.contains(active) || typeof active.blur !== "function") return;
+      active.blur();
+    };
     const openRow = (row: HTMLElement) => {
       if (!row.dataset.gameId) return;
       options.onOpenGame({
         gameId: row.dataset.gameId,
         isTeamDuel: row.dataset.team === "1",
       });
+      releaseFocus();
     };
     scrollArea?.addEventListener("click", (event) => {
       const target = event.target as Element | null;
-      if (target?.closest("a")) return;
+      if (target?.closest("a")) {
+        releaseFocus();
+        return;
+      }
       const row = target?.closest<HTMLElement>("[data-game-id]");
       if (row) openRow(row);
     });
