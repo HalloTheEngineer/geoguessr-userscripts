@@ -64,7 +64,7 @@ export const SELECTORS: Record<string, SelectorSpec> = {
     description: "Native button",
   },
   "guessMap.root": {
-    any: ['[data-qa="guess-map"]'],
+    any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]', "[data-game-hud]"],
     description: "Guess map wrapper",
   },
   "guessMap.canvas": {

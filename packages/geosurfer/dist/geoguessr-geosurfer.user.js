@@ -264,7 +264,7 @@
       description: "Native button"
     },
     "guessMap.root": {
-      any: ['[data-qa="guess-map"]'],
+      any: ['[data-qa="guess-map"]', '[class*="_guessMap_"]', "[data-game-hud]"],
       description: "Guess map wrapper"
     },
     "guessMap.canvas": {
@@ -422,18 +422,18 @@
   var PREFIXES = {
     tab: '[role="tablist"] [role="tab"]',
     panel: '[role="tabpanel"]',
-    row: '[class*="game-menu_row__"]',
-    rowLabel: '[class*="game-menu_rowLabel__"]',
-    rowControl: '[class*="game-menu_rowControl__"]',
-    rowNote: '[class*="game-menu_rowNote__"]',
-    rowState: '[class*="game-menu_rowState__"]',
-    divider: '[class*="game-menu_divider__"]',
-    toggle: '[class*="toggle_toggle__"]',
-    toggleInput: '[class*="toggle_input__"]',
+    row: '[class*="game-menu_row__"], [class*="_row_"]',
+    rowLabel: '[class*="game-menu_rowLabel__"], [class*="_rowLabel_"]',
+    rowControl: '[class*="game-menu_rowControl__"], [class*="_rowControl_"]',
+    rowNote: '[class*="game-menu_rowNote__"], [class*="_rowNote_"]',
+    rowState: '[class*="game-menu_rowState__"], [class*="_rowState_"]',
+    divider: '[class*="game-menu_divider__"], [class*="_divider_"]',
+    toggle: '[class*="toggle_toggle__"], [class*="_toggle_"]',
+    toggleInput: '[class*="toggle_input__"], [class*="_toggle_"] input',
     rangeField: '[class*="range-slider_field__"]',
-    rangeInput: '[class*="range-slider_rangeSlider__"]',
-    rangeThumb: '[class*="range-slider_thumbvalue__"]',
-    rangeBubble: '[class*="range-slider_bubble__"]',
+    rangeInput: '[class*="range-slider_rangeSlider__"], [class*="_rangeSlider_"]',
+    rangeThumb: '[class*="range-slider_thumbvalue__"], [class*="_thumbvalue_"]',
+    rangeBubble: '[class*="range-slider_bubble__"], [class*="_bubble_"]',
     selectWrap: '[class*="dropdown_dropdown__"]',
     select: '[class*="dropdown_select__"]',
     selectArrow: '[class*="dropdown_arrow__"]',
@@ -1541,7 +1541,7 @@
 
   // src/main.ts
   var ROOT_SELECTOR = '[class*="in-game-stats-overlay_root__"]';
-  var CARD_SELECTOR = '[class*="in-game-stats-overlay_cardWrapper__"]';
+  var CARD_SELECTOR = '[class*="in-game-stats-overlay_cardWrapper__"], [class*="_cardWrapper_"]';
   var CARD_ID = "gg-surfer-card";
   function resourceUrl() {
     try {
@@ -1658,14 +1658,23 @@
           cleanup();
           return;
         }
-        const root = document.querySelector(ROOT_SELECTOR);
+        const collect = (container) => [...container.querySelectorAll(CARD_SELECTOR)].filter((element) => element.id !== CARD_ID);
+        let root = document.querySelector(ROOT_SELECTOR);
+        let cards = root ? collect(root) : [];
+        if (cards.length < 2) {
+          const parent = collect(document)[0]?.parentElement;
+          const siblings = parent ? [...parent.children].filter(
+            (element) => element.matches(CARD_SELECTOR) && element.id !== CARD_ID
+          ) : [];
+          if (parent && siblings.length >= 2) {
+            root = parent;
+            cards = siblings;
+          }
+        }
         if (!root) {
           cleanup();
           return;
         }
-        const cards = [...root.querySelectorAll(CARD_SELECTOR)].filter(
-          (element) => element.id !== CARD_ID
-        );
         if (card && root.contains(card)) {
           if (cards.length < 2) cleanup();
           else attachVisibility();

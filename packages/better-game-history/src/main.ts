@@ -89,6 +89,8 @@ const GAME_MAP_SELECTORS = [
   '[class*="guess-map_guessMap__"]',
   '[class*="_guessMap_"]',
   '[class*="_mapCanvas_"]',
+  '[class*="_gameLayout_"]',
+  "[data-game-hud]",
 ];
 
 function hasGameMap(): boolean {

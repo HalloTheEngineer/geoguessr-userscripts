@@ -6,7 +6,9 @@ declare const __GEOSURFER_RESOURCE_URL__: string;
 declare function GM_getResourceURL(name: string): string;
 
 const ROOT_SELECTOR = '[class*="in-game-stats-overlay_root__"]';
-const CARD_SELECTOR = '[class*="in-game-stats-overlay_cardWrapper__"]';
+// The current duel overlay renders cards as _cardWrapper_<hash> with no stable root class,
+// so the cards' shared parent is used as the container when no legacy root exists.
+const CARD_SELECTOR = '[class*="in-game-stats-overlay_cardWrapper__"], [class*="_cardWrapper_"]';
 const CARD_ID = "gg-surfer-card";
 
 function resourceUrl(): string {
@@ -134,14 +136,26 @@ startUserscript({
         cleanup();
         return;
       }
-      const root = document.querySelector(ROOT_SELECTOR);
+      const collect = (container: ParentNode): Element[] =>
+        [...container.querySelectorAll(CARD_SELECTOR)].filter((element) => element.id !== CARD_ID);
+      let root: Element | null = document.querySelector(ROOT_SELECTOR);
+      let cards = root ? collect(root) : [];
+      if (cards.length < 2) {
+        const parent = collect(document)[0]?.parentElement;
+        const siblings = parent
+          ? [...parent.children].filter(
+              (element) => element.matches(CARD_SELECTOR) && element.id !== CARD_ID,
+            )
+          : [];
+        if (parent && siblings.length >= 2) {
+          root = parent;
+          cards = siblings;
+        }
+      }
       if (!root) {
         cleanup();
         return;
       }
-      const cards = [...root.querySelectorAll(CARD_SELECTOR)].filter(
-        (element) => element.id !== CARD_ID,
-      );
       if (card && root.contains(card)) {
         if (cards.length < 2) cleanup();
         else attachVisibility();
