@@ -52,3 +52,31 @@ test("a changed build within the same scheme warns once", () => {
     console.warn = original;
   }
 });
+
+test("switching from the entry hash to the app build id migrates silently", () => {
+  (dom.window as unknown as { __GEOGUESSR_BUILD_ID__?: string }).__GEOGUESSR_BUILD_ID__ =
+    "2.9214-e8df23d";
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => warnings.push(args.join(" "));
+  try {
+    const result = checkSiteBuild();
+    assert.equal(result.build, "2.9214-e8df23d");
+    assert.equal(result.changed, false);
+    assert.deepEqual(warnings, []);
+    assert.equal(dom.localStorage.getItem("gg-kit.last-site-build"), "app:2.9214-e8df23d");
+  } finally {
+    console.warn = original;
+  }
+});
+
+test("the build check retries when the config script runs late", async () => {
+  delete (dom.window as unknown as { __GEOGUESSR_BUILD_ID__?: string }).__GEOGUESSR_BUILD_ID__;
+  dom.document.head.innerHTML = "";
+  dom.localStorage.removeItem("gg-kit.last-site-build");
+  assert.equal(checkSiteBuild().build, null);
+  (dom.window as unknown as { __GEOGUESSR_BUILD_ID__?: string }).__GEOGUESSR_BUILD_ID__ =
+    "2.9300-abcdef0";
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(dom.localStorage.getItem("gg-kit.last-site-build"), "app:2.9300-abcdef0");
+});

@@ -43,3 +43,10 @@ test("siteBuild falls back to the SPA entry bundle hash", () => {
   dom.document.head.innerHTML = '<script src="/static/_start/index-BGzclomL.js"></script>';
   assert.equal(siteBuild(), "BGzclomL");
 });
+
+test("siteBuild prefers the app build id over the entry hash", () => {
+  (dom.window as unknown as { __GEOGUESSR_BUILD_ID__?: string }).__GEOGUESSR_BUILD_ID__ =
+    "2.9214-e8df23d";
+  assert.equal(siteBuild(), "2.9214-e8df23d");
+  delete (dom.window as unknown as { __GEOGUESSR_BUILD_ID__?: string }).__GEOGUESSR_BUILD_ID__;
+});

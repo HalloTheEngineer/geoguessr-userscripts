@@ -64,6 +64,12 @@
     return value;
   }
   function siteBuildInfo() {
+    if (hasDom()) {
+      const win2 = pageWindow();
+      if (isBuildId(win2.__GEOGUESSR_BUILD_ID__)) {
+        return { build: win2.__GEOGUESSR_BUILD_ID__, scheme: "app" };
+      }
+    }
     const data = nextData();
     if (isBuildId(data?.buildId)) return { build: data.buildId, scheme: "next" };
     if (!hasDom()) return null;
@@ -320,7 +326,9 @@
   var KEY2 = "__GG_KIT_DIAGNOSTICS__";
   var API_VERSION2 = 1;
   var BUILD_KEY = "gg-kit.last-site-build";
-  var BUILD_SCHEMES = ["next", "spa"];
+  var BUILD_SCHEMES = ["app", "next", "spa"];
+  var buildRetryScheduled = false;
+  var buildRetryDone = false;
   function decodeBuild(stored) {
     if (!stored) return { build: null, scheme: null };
     const separator = stored.indexOf(":");
@@ -353,9 +361,24 @@
   function registerScript(name, version) {
     registry().scripts.set(name, { name, version, loadedAt: (/* @__PURE__ */ new Date()).toISOString() });
   }
+  function scheduleBuildRecheck() {
+    if (!hasDom() || buildRetryScheduled || buildRetryDone) return;
+    buildRetryScheduled = true;
+    const run = () => {
+      buildRetryScheduled = false;
+      buildRetryDone = true;
+      checkSiteBuild();
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", run, { once: true });
+    } else {
+      setTimeout(run, 0);
+    }
+  }
   function checkSiteBuild() {
     const info = siteBuildInfo();
     if (!info || !hasDom()) {
+      scheduleBuildRecheck();
       return { build: info?.build ?? null, changed: false, previous: null };
     }
     let previous = { build: null, scheme: null };

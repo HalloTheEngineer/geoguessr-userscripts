@@ -17,7 +17,9 @@ interface Registry {
 const KEY = "__GG_KIT_DIAGNOSTICS__";
 const API_VERSION = 1;
 const BUILD_KEY = "gg-kit.last-site-build";
-const BUILD_SCHEMES: SiteBuildScheme[] = ["next", "spa"];
+const BUILD_SCHEMES: SiteBuildScheme[] = ["app", "next", "spa"];
+let buildRetryScheduled = false;
+let buildRetryDone = false;
 
 interface StoredBuild {
   build: string | null;
@@ -60,6 +62,21 @@ export function registerScript(name: string, version: string): void {
   registry().scripts.set(name, { name, version, loadedAt: new Date().toISOString() });
 }
 
+function scheduleBuildRecheck(): void {
+  if (!hasDom() || buildRetryScheduled || buildRetryDone) return;
+  buildRetryScheduled = true;
+  const run = () => {
+    buildRetryScheduled = false;
+    buildRetryDone = true;
+    checkSiteBuild();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
 export function checkSiteBuild(): {
   build: string | null;
   changed: boolean;
@@ -67,6 +84,9 @@ export function checkSiteBuild(): {
 } {
   const info = siteBuildInfo();
   if (!info || !hasDom()) {
+    // At document-start the config script (which sets __GEOGUESSR_BUILD_ID__) may
+    // not have executed yet, so try once more when the document is parseable.
+    scheduleBuildRecheck();
     return { build: info?.build ?? null, changed: false, previous: null };
   }
   let previous: StoredBuild = { build: null, scheme: null };

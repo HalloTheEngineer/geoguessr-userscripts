@@ -37,11 +37,16 @@ export function nextData(): NextData | null {
   return value;
 }
 
-export type SiteBuildScheme = "next" | "spa";
+export type SiteBuildScheme = "app" | "next" | "spa";
 
 export interface SiteBuildInfo {
   build: string;
   scheme: SiteBuildScheme;
+}
+
+interface SiteWindow {
+  __GEOGUESSR_BUILD_ID__?: unknown;
+  __NEXT_DATA__?: NextData;
 }
 
 /**
@@ -49,12 +54,19 @@ export interface SiteBuildInfo {
  * scheme is reported alongside it. Build ids are only comparable within a scheme.
  */
 export function siteBuildInfo(): SiteBuildInfo | null {
+  if (hasDom()) {
+    const win = pageWindow() as unknown as SiteWindow;
+    if (isBuildId(win.__GEOGUESSR_BUILD_ID__)) {
+      return { build: win.__GEOGUESSR_BUILD_ID__, scheme: "app" };
+    }
+  }
+
   const data = nextData();
   if (isBuildId(data?.buildId)) return { build: data.buildId, scheme: "next" };
 
   if (!hasDom()) return null;
 
-  const win = pageWindow() as unknown as { __NEXT_DATA__?: NextData };
+  const win = pageWindow() as unknown as SiteWindow;
   if (isBuildId(win.__NEXT_DATA__?.buildId)) {
     return { build: win.__NEXT_DATA__!.buildId!, scheme: "next" };
   }
