@@ -46,21 +46,33 @@ function scheduler(): DomScheduler | null {
       }
     }, 50) as unknown as number;
   };
+  let observedRoot: Element | null = null;
+  let visibilityHooked = false;
   const start = () => {
-    if (state.started) return;
     const root = document.documentElement;
     if (!root) {
+      // document-start can run before <html> exists, and the document can be replaced.
       setTimeout(start, 50);
       return;
     }
-    state.observer.observe(root, { childList: true, subtree: true });
+    if (state.started && observedRoot === root) return;
+    try {
+      state.observer.observe(root, { childList: true, subtree: true });
+    } catch {
+      setTimeout(start, 50);
+      return;
+    }
+    observedRoot = root;
     state.started = true;
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) schedule();
-    });
+    if (!visibilityHooked) {
+      visibilityHooked = true;
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) schedule();
+      });
+    }
   };
-  start();
   win[KEY] = state;
+  start();
   return state;
 }
 

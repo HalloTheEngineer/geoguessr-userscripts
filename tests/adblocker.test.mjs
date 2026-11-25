@@ -5,7 +5,10 @@ import { Window } from "happy-dom";
 
 const bundle = fs.readFileSync("packages/adblocker/dist/geoguessr-adblocker.user.js", "utf8");
 
-async function runAdblocker(enabled, { readyState = "complete", waitMs = 650 } = {}) {
+async function runAdblocker(
+  enabled,
+  { readyState = "complete", waitMs = 650, missingDocumentRootMs = 0 } = {},
+) {
   const dom = new Window({ url: "https://www.geoguessr.com/" });
   Object.assign(globalThis, {
     window: dom,
@@ -34,6 +37,19 @@ async function runAdblocker(enabled, { readyState = "complete", waitMs = 650 } =
       <div><div role="tabpanel">Native</div></div>
     </dialog>
     <script src="https://doubleclick.net/ad.js"></script>`;
+  const root = dom.document.documentElement;
+  if (missingDocumentRootMs > 0) {
+    Object.defineProperty(dom.document, "documentElement", {
+      configurable: true,
+      get: () => null,
+    });
+    setTimeout(() => {
+      Object.defineProperty(dom.document, "documentElement", {
+        configurable: true,
+        value: root,
+      });
+    }, missingDocumentRootMs);
+  }
   new Function(bundle)();
   await new Promise((resolve) => setTimeout(resolve, waitMs));
   return dom;
@@ -54,5 +70,10 @@ test("enabled AdBlocker waits for app readiness before destructive cleanup", asy
   assert.ok(dom.document.querySelector('script[src*="doubleclick"]'));
   dom.window.dispatchEvent(new dom.Event("load"));
   await new Promise((resolve) => setTimeout(resolve, 650));
+  assert.equal(dom.document.querySelector('script[src*="doubleclick"]'), null);
+});
+
+test("enabled AdBlocker recovers when document-start has no document root", async () => {
+  const dom = await runAdblocker(true, { missingDocumentRootMs: 100, waitMs: 1000 });
   assert.equal(dom.document.querySelector('script[src*="doubleclick"]'), null);
 });

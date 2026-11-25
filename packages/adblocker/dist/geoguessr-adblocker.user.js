@@ -142,21 +142,32 @@
         }
       }, 50);
     };
+    let observedRoot = null;
+    let visibilityHooked = false;
     const start = () => {
-      if (state.started) return;
       const root = document.documentElement;
       if (!root) {
         setTimeout(start, 50);
         return;
       }
-      state.observer.observe(root, { childList: true, subtree: true });
+      if (state.started && observedRoot === root) return;
+      try {
+        state.observer.observe(root, { childList: true, subtree: true });
+      } catch {
+        setTimeout(start, 50);
+        return;
+      }
+      observedRoot = root;
       state.started = true;
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) schedule();
-      });
+      if (!visibilityHooked) {
+        visibilityHooked = true;
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) schedule();
+        });
+      }
     };
-    start();
     win[KEY] = state;
+    start();
     return state;
   }
   function onDomChange(callback) {
@@ -1528,6 +1539,27 @@
   function abortError() {
     return new DOMException("Aborted", "AbortError");
   }
+  function documentRoot() {
+    const root = document.documentElement;
+    return root && root.nodeType === 1 ? root : null;
+  }
+  function delay(ms, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(abortError());
+        return;
+      }
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(abortError());
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
   function waitForLoad(signal) {
     if (document.readyState === "complete") return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -1547,12 +1579,56 @@
       window.addEventListener("load", onLoad, { once: true });
     });
   }
-  function waitForDomQuiet(quietMs, maxWaitMs, signal) {
+  function waitForDocumentRoot(maxWaitMs, signal) {
+    const root = documentRoot();
+    if (root) return Promise.resolve(root);
     if (signal?.aborted) return Promise.reject(abortError());
-    if (typeof MutationObserver === "undefined") {
-      return new Promise((resolve) => setTimeout(resolve, quietMs));
-    }
     return new Promise((resolve, reject) => {
+      let finished = false;
+      let timer = null;
+      let poll = null;
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        if (poll) clearInterval(poll);
+        timer = null;
+        poll = null;
+        document.removeEventListener("readystatechange", check);
+        document.removeEventListener("DOMContentLoaded", check);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const finish = (value) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolve(value);
+      };
+      const check = () => {
+        const current = documentRoot();
+        if (current) finish(current);
+      };
+      const onAbort = () => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        reject(abortError());
+      };
+      document.addEventListener("readystatechange", check);
+      document.addEventListener("DOMContentLoaded", check);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      poll = setInterval(check, 16);
+      timer = setTimeout(() => finish(documentRoot()), Math.max(0, maxWaitMs));
+      check();
+    });
+  }
+  async function waitForDomQuiet(quietMs, maxWaitMs, signal) {
+    if (signal?.aborted) throw abortError();
+    const root = await waitForDocumentRoot(maxWaitMs, signal);
+    if (signal?.aborted) throw abortError();
+    if (!root || typeof MutationObserver === "undefined") {
+      await delay(quietMs, signal);
+      return;
+    }
+    await new Promise((resolve, reject) => {
       let quietTimer = null;
       let maxTimer = null;
       let finished = false;
@@ -1580,7 +1656,12 @@
       };
       const observer = new MutationObserver(reset);
       signal?.addEventListener("abort", onAbort, { once: true });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+      try {
+        observer.observe(root, { childList: true, subtree: true });
+      } catch {
+        finish();
+        return;
+      }
       maxTimer = setTimeout(finish, Math.max(quietMs, maxWaitMs));
       reset();
     });
@@ -1931,9 +2012,11 @@
         if (changed) scheduleBlock();
       });
       let observing = false;
+      let observedRoot = null;
       let retry = null;
       let routeTimer = null;
       let readyController = null;
+      let readyAttempts = 0;
       const stopObserver = () => {
         if (retry) {
           clearTimeout(retry);
@@ -1941,9 +2024,10 @@
         }
         observer.disconnect();
         observing = false;
+        observedRoot = null;
       };
       const startObserver = () => {
-        if (!appReady || observing || retry || !adblockerConfig.get("enabled")) return;
+        if (!appReady || retry || !adblockerConfig.get("enabled")) return;
         const root = document.documentElement;
         if (!root) {
           retry = setTimeout(() => {
@@ -1952,9 +2036,28 @@
           }, 20);
           return;
         }
-        observer.observe(root, { childList: true, subtree: true });
+        const rootChanged = observedRoot !== root;
+        if (observing && !rootChanged) return;
+        if (observing) observer.disconnect();
+        try {
+          observer.observe(root, { childList: true, subtree: true });
+        } catch (error) {
+          observing = false;
+          observedRoot = null;
+          context.log("observer attach failed", error);
+          retry = setTimeout(() => {
+            retry = null;
+            startObserver();
+          }, 20);
+          return;
+        }
         observing = true;
+        observedRoot = root;
         context.log("initialized");
+        if (rootChanged) {
+          scanAndRemoveScripts(root);
+          scheduleBlock();
+        }
       };
       const runCleanup = () => {
         if (!appReady || !adblockerConfig.get("enabled")) return;
@@ -1966,20 +2069,28 @@
         readyController?.abort();
         readyController = null;
       };
+      const markReady = () => {
+        if (appReady) return;
+        appReady = true;
+        runCleanup();
+      };
       const scheduleReady = () => {
         if (appReady || readyController || !adblockerConfig.get("enabled")) return;
         const controller = new AbortController();
         readyController = controller;
         void waitForAppReady({ signal: controller.signal }).then(() => {
           if (controller.signal.aborted || !adblockerConfig.get("enabled")) return;
-          appReady = true;
-          runCleanup();
+          markReady();
         }).catch((error) => {
-          if (!(error instanceof DOMException && error.name === "AbortError")) {
-            context.log("app readiness wait failed", error);
-          }
+          if (controller.signal.aborted) return;
+          context.log("app readiness wait failed", error);
+          readyAttempts++;
+          if (readyAttempts >= 3) markReady();
         }).finally(() => {
-          if (readyController === controller) readyController = null;
+          if (readyController !== controller) return;
+          readyController = null;
+          if (appReady || !adblockerConfig.get("enabled")) return;
+          scheduleReady();
         });
       };
       const sync = () => {

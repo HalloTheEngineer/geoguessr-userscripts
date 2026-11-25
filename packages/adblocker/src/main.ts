@@ -235,9 +235,11 @@ startUserscript({
     });
 
     let observing = false;
+    let observedRoot: Element | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let routeTimer: ReturnType<typeof setTimeout> | null = null;
     let readyController: AbortController | null = null;
+    let readyAttempts = 0;
 
     const stopObserver = () => {
       if (retry) {
@@ -246,9 +248,10 @@ startUserscript({
       }
       observer.disconnect();
       observing = false;
+      observedRoot = null;
     };
     const startObserver = () => {
-      if (!appReady || observing || retry || !adblockerConfig.get("enabled")) return;
+      if (!appReady || retry || !adblockerConfig.get("enabled")) return;
       const root = document.documentElement;
       if (!root) {
         retry = setTimeout(() => {
@@ -257,9 +260,30 @@ startUserscript({
         }, 20);
         return;
       }
-      observer.observe(root, { childList: true, subtree: true });
+      const rootChanged = observedRoot !== root;
+      if (observing && !rootChanged) return;
+      if (observing) observer.disconnect();
+      try {
+        observer.observe(root, { childList: true, subtree: true });
+      } catch (error) {
+        // The root can be replaced between the check and the call.
+        observing = false;
+        observedRoot = null;
+        context.log("observer attach failed", error);
+        retry = setTimeout(() => {
+          retry = null;
+          startObserver();
+        }, 20);
+        return;
+      }
       observing = true;
+      observedRoot = root;
       context.log("initialized");
+      if (rootChanged) {
+        // The document root appeared or was replaced; catch up on what was already there.
+        scanAndRemoveScripts(root);
+        scheduleBlock();
+      }
     };
     const runCleanup = () => {
       if (!appReady || !adblockerConfig.get("enabled")) return;
@@ -271,6 +295,11 @@ startUserscript({
       readyController?.abort();
       readyController = null;
     };
+    const markReady = () => {
+      if (appReady) return;
+      appReady = true;
+      runCleanup();
+    };
     const scheduleReady = () => {
       if (appReady || readyController || !adblockerConfig.get("enabled")) return;
       const controller = new AbortController();
@@ -278,16 +307,20 @@ startUserscript({
       void waitForAppReady({ signal: controller.signal })
         .then(() => {
           if (controller.signal.aborted || !adblockerConfig.get("enabled")) return;
-          appReady = true;
-          runCleanup();
+          markReady();
         })
         .catch((error) => {
-          if (!(error instanceof DOMException && error.name === "AbortError")) {
-            context.log("app readiness wait failed", error);
-          }
+          if (controller.signal.aborted) return;
+          context.log("app readiness wait failed", error);
+          // Never stay inert: fall back to a best-effort cleanup after repeated failures.
+          readyAttempts++;
+          if (readyAttempts >= 3) markReady();
         })
         .finally(() => {
-          if (readyController === controller) readyController = null;
+          if (readyController !== controller) return;
+          readyController = null;
+          if (appReady || !adblockerConfig.get("enabled")) return;
+          scheduleReady();
         });
     };
 

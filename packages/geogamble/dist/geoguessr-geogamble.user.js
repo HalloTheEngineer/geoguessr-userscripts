@@ -132,21 +132,32 @@
         }
       }, 50);
     };
+    let observedRoot = null;
+    let visibilityHooked = false;
     const start = () => {
-      if (state3.started) return;
       const root = document.documentElement;
       if (!root) {
         setTimeout(start, 50);
         return;
       }
-      state3.observer.observe(root, { childList: true, subtree: true });
+      if (state3.started && observedRoot === root) return;
+      try {
+        state3.observer.observe(root, { childList: true, subtree: true });
+      } catch {
+        setTimeout(start, 50);
+        return;
+      }
+      observedRoot = root;
       state3.started = true;
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) schedule();
-      });
+      if (!visibilityHooked) {
+        visibilityHooked = true;
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) schedule();
+        });
+      }
     };
-    start();
     win[KEY] = state3;
+    start();
     return state3;
   }
   function onDomChange(callback) {

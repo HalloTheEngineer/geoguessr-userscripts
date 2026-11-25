@@ -176,21 +176,32 @@
         }
       }, 50);
     };
+    let observedRoot = null;
+    let visibilityHooked = false;
     const start = () => {
-      if (state2.started) return;
       const root = document.documentElement;
       if (!root) {
         setTimeout(start, 50);
         return;
       }
-      state2.observer.observe(root, { childList: true, subtree: true });
+      if (state2.started && observedRoot === root) return;
+      try {
+        state2.observer.observe(root, { childList: true, subtree: true });
+      } catch {
+        setTimeout(start, 50);
+        return;
+      }
+      observedRoot = root;
       state2.started = true;
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) schedule();
-      });
+      if (!visibilityHooked) {
+        visibilityHooked = true;
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) schedule();
+        });
+      }
     };
-    start();
     win[KEY] = state2;
+    start();
     return state2;
   }
   function onDomChange(callback2) {
