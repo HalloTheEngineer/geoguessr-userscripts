@@ -23,6 +23,7 @@ test("Better Game History mounts account-scoped history and graph access", async
     MutationObserver: dom.MutationObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom),
   });
+  const now = Date.now();
   dom.localStorage.setItem("gg.persistent-game-summary.history", "old");
   dom.localStorage.setItem(
     "gg.better-game-history.history",
@@ -32,7 +33,7 @@ test("Better Game History mounts account-scoped history and graph access", async
         {
           gameId: "game-1",
           userId: "account-user",
-          time: "2026-11-19T12:00:00.000Z",
+          time: new Date(now - 3_600_000).toISOString(),
           modeKey: "Duels",
           mode: "Moving",
           isRated: true,
@@ -44,13 +45,13 @@ test("Better Game History mounts account-scoped history and graph access", async
           ratingAfter: 1020,
           ratingChange: 20,
           hydration: { state: "ok", attempts: 1 },
-          updatedAt: "2026-11-19T12:01:00.000Z",
+          updatedAt: new Date(now - 3_540_000).toISOString(),
           source: "hydration",
         },
         {
           gameId: "team-game-1",
           userId: "account-user",
-          time: "2026-11-19T13:00:00.000Z",
+          time: new Date(now - 1_800_000).toISOString(),
           modeKey: "TeamDuels",
           mode: "Team",
           isRated: true,
@@ -66,7 +67,7 @@ test("Better Game History mounts account-scoped history and graph access", async
           ratingAfter: 1515,
           ratingChange: 15,
           hydration: { state: "ok", attempts: 1 },
-          updatedAt: "2026-11-19T13:01:00.000Z",
+          updatedAt: new Date(now - 1_740_000).toISOString(),
           source: "hydration",
         },
       ],

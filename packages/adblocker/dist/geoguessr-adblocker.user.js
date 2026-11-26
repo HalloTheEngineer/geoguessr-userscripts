@@ -1859,26 +1859,6 @@
       category: "home"
     }
   ];
-  var STRUCTURAL_MAPPINGS = [
-    {
-      source: '[class*="styles_columnTwo__"]',
-      target: '[class*="styles_columnOne__"]',
-      reverseOrder: true,
-      category: "inGame"
-    },
-    {
-      source: '[class*="_columnTwo_"]',
-      target: '[class*="_columnOne_"]',
-      reverseOrder: true,
-      category: "inGame"
-    },
-    {
-      source: '[class*="_chatInput_"]',
-      target: '[class*="_columnOne_"]',
-      reverseOrder: false,
-      category: "inGame"
-    }
-  ];
 
   // src/main.ts
   function categoryEnabled(category) {
@@ -1997,21 +1977,6 @@
         element.closest(rule.ancestor)?.remove();
         count++;
       }
-    }
-    for (const rule of STRUCTURAL_MAPPINGS) {
-      if (!categoryEnabled(rule.category)) continue;
-      const sources = document.querySelectorAll(rule.source);
-      const targets = document.querySelectorAll(rule.target);
-      if (sources.length !== 1 || targets.length !== 1) continue;
-      const source = sources[0];
-      const target = targets[0];
-      if (!source.children.length) continue;
-      for (const child of [...source.children]) {
-        if (rule.reverseOrder) target.prepend(child);
-        else target.append(child);
-      }
-      source.remove();
-      count++;
     }
     syncCss();
     if (count) log("elements handled", count);

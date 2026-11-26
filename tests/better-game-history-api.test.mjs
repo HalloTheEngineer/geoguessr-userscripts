@@ -23,6 +23,7 @@ test("Better Game History mounts without __NEXT_DATA__ by using the profile API"
     MutationObserver: dom.MutationObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom),
   });
+  const now = Date.now();
   dom.localStorage.setItem(
     "gg.better-game-history.history",
     JSON.stringify({
@@ -31,7 +32,7 @@ test("Better Game History mounts without __NEXT_DATA__ by using the profile API"
         {
           gameId: "game-1",
           userId: "account-user",
-          time: "2026-11-19T12:00:00.000Z",
+          time: new Date(now - 3_600_000).toISOString(),
           modeKey: "Duels",
           mode: "Moving",
           isRated: true,
@@ -43,7 +44,7 @@ test("Better Game History mounts without __NEXT_DATA__ by using the profile API"
           ratingAfter: 1020,
           ratingChange: 20,
           hydration: { state: "ok", attempts: 1 },
-          updatedAt: "2026-11-19T12:01:00.000Z",
+          updatedAt: new Date(now - 3_540_000).toISOString(),
           source: "hydration",
         },
       ],

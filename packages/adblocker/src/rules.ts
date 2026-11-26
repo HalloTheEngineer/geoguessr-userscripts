@@ -12,13 +12,6 @@ export interface AncestorRule {
   category: Category;
 }
 
-export interface StructuralRule {
-  source: string;
-  target: string;
-  reverseOrder: boolean;
-  category: Category;
-}
-
 export const DIRECT_BLOCK_CONFIG: Rule[] = [
   { selector: '[class*="team-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
   { selector: '[class*="ranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
@@ -73,26 +66,5 @@ export const ANCESTOR_BLOCK_CONFIG: AncestorRule[] = [
     selector: '[class*="_explorer_"]',
     ancestor: '[class*="_widgetRow_"]',
     category: "home",
-  },
-];
-
-export const STRUCTURAL_MAPPINGS: StructuralRule[] = [
-  {
-    source: '[class*="styles_columnTwo__"]',
-    target: '[class*="styles_columnOne__"]',
-    reverseOrder: true,
-    category: "inGame",
-  },
-  {
-    source: '[class*="_columnTwo_"]',
-    target: '[class*="_columnOne_"]',
-    reverseOrder: true,
-    category: "inGame",
-  },
-  {
-    source: '[class*="_chatInput_"]',
-    target: '[class*="_columnOne_"]',
-    reverseOrder: false,
-    category: "inGame",
   },
 ];

@@ -3,12 +3,7 @@ import networkRules from "../network-rules.json";
 import { waitForAppReady } from "./app-ready.js";
 import { adblockerConfig } from "./config.js";
 import type { Category } from "./rules.js";
-import {
-  ANCESTOR_BLOCK_CONFIG,
-  CSS_HIDING_SELECTORS,
-  DIRECT_BLOCK_CONFIG,
-  STRUCTURAL_MAPPINGS,
-} from "./rules.js";
+import { ANCESTOR_BLOCK_CONFIG, CSS_HIDING_SELECTORS, DIRECT_BLOCK_CONFIG } from "./rules.js";
 
 declare const __ADBLOCKER_VERSION__: string;
 
@@ -147,22 +142,6 @@ function blockElements(): void {
       element.closest(rule.ancestor)?.remove();
       count++;
     }
-  }
-
-  for (const rule of STRUCTURAL_MAPPINGS) {
-    if (!categoryEnabled(rule.category)) continue;
-    const sources = document.querySelectorAll(rule.source);
-    const targets = document.querySelectorAll(rule.target);
-    if (sources.length !== 1 || targets.length !== 1) continue;
-    const source = sources[0];
-    const target = targets[0];
-    if (!source.children.length) continue;
-    for (const child of [...source.children]) {
-      if (rule.reverseOrder) target.prepend(child);
-      else target.append(child);
-    }
-    source.remove();
-    count++;
   }
 
   syncCss();
