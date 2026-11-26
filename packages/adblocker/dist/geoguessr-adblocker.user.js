@@ -1806,22 +1806,6 @@
 
   // src/rules.ts
   var DIRECT_BLOCK_CONFIG = [
-    { selector: '[class*="team-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="ranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="unranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="team-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="ranked-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="unranked-matchmaking-layout_footer__"]', category: "multiplayer" },
-    { selector: '[class*="_footerEnter_"]', category: "multiplayer" },
-    { selector: '[class*="styles_friendChatButton__"]', category: "inGame" },
-    { selector: '[class*="_friendChatButton_"]', category: "inGame" },
-    { selector: '[class*="home_footer__"]', category: "home", url_paths: ["/"] },
-    { selector: '[class*="new-losp-footer_root__"]', category: "home", url_paths: ["/"] },
-    { selector: '[class*="footer_footer__"]', category: "home", url_paths: ["/"] },
-    { selector: '[class*="_footer_"]', category: "home", url_paths: ["/"] },
-    { selector: '[class*="home_editButtonWrapper__"]', category: "home" },
-    { selector: '[class*="pro-user-start-page_editButtonWrapper__"]', category: "home" },
-    { selector: '[class*="_editButtonWrapper_"]', category: "home" },
     { selector: 'iframe[name="__tcfapiLocator"]', category: "ads" },
     { selector: 'iframe[name="__uspapiLocator"]', category: "ads" },
     { selector: 'iframe[name="__adconsentLocator"]', category: "ads" },
@@ -1837,25 +1821,34 @@
       category: "home"
     }
   ];
-  var ANCESTOR_BLOCK_CONFIG = [
+  var CSS_COLLAPSE_SELECTORS = [
     {
-      selector: '[class*="_friendIcon_"]',
-      ancestor: '[class*="_contacts_"]',
+      selector: '[class*="team-v2-matchmaking-layout_footer__"], [class*="ranked-v2-matchmaking-layout_footer__"], [class*="unranked-v2-matchmaking-layout_footer__"], [class*="team-matchmaking-layout_footer__"], [class*="ranked-matchmaking-layout_footer__"], [class*="unranked-matchmaking-layout_footer__"], [class*="_footerEnter_"]',
+      category: "multiplayer"
+    },
+    {
+      selector: '[class*="styles_friendChatButton__"], [class*="_friendChatButton_"]',
       category: "inGame"
     },
     {
-      selector: '[data-qa="pano-zoom-in"]',
-      ancestor: '[class*="_controlGroup_"]',
+      selector: '[class*="_contacts_"]:has([class*="_friendIcon_"])',
       category: "inGame"
     },
     {
-      selector: '[class*="widget_explorer__"]',
-      ancestor: '[class*="profile-v2_widgetRow__"]',
+      selector: '[class*="_controlGroup_"]:has([data-qa="pano-zoom-in"])',
+      category: "inGame"
+    },
+    {
+      selector: '[class*="home_footer__"], [class*="new-losp-footer_root__"], [class*="footer_footer__"], [class*="_footer_"]',
+      category: "home",
+      url_paths: ["/"]
+    },
+    {
+      selector: '[class*="home_editButtonWrapper__"], [class*="pro-user-start-page_editButtonWrapper__"], [class*="_editButtonWrapper_"]',
       category: "home"
     },
     {
-      selector: '[class*="_explorer_"]',
-      ancestor: '[class*="_widgetRow_"]',
+      selector: '[class*="profile-v2_widgetRow__"]:has([class*="widget_explorer__"]), [class*="_widgetRow_"]:has([class*="_explorer_"])',
       category: "home"
     }
   ];
@@ -1924,10 +1917,10 @@
     }
   }
   function syncCss() {
-    const selectors = CSS_HIDING_SELECTORS.filter(
-      (rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths)
-    ).map((rule) => rule.selector);
-    const css = `${selectors.length ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }` : ""}`;
+    const active = (rules) => rules.filter((rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths)).map((rule) => rule.selector);
+    const hidden = active(CSS_HIDING_SELECTORS);
+    const collapsed = active(CSS_COLLAPSE_SELECTORS);
+    const css = `${hidden.length ? `${hidden.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }` : ""}${collapsed.length ? `${collapsed.join(", ")} { display: none !important; }` : ""}`;
     const existing = document.getElementById("geoguessr-adblocker-style");
     if (existing) existing.textContent = css;
     else injectStyle("geoguessr-adblocker-style", css);
@@ -1968,13 +1961,6 @@
       if (!categoryEnabled(rule.category) || !pathMatches(rule.url_paths)) continue;
       for (const element of document.querySelectorAll(rule.selector)) {
         element.remove();
-        count++;
-      }
-    }
-    for (const rule of ANCESTOR_BLOCK_CONFIG) {
-      if (!categoryEnabled(rule.category)) continue;
-      for (const element of document.querySelectorAll(rule.selector)) {
-        element.closest(rule.ancestor)?.remove();
         count++;
       }
     }

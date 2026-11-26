@@ -6,29 +6,9 @@ export interface Rule {
   url_paths?: string[];
 }
 
-export interface AncestorRule {
-  selector: string;
-  ancestor: string;
-  category: Category;
-}
-
+// Only third-party nodes are removed: React does not own them, so removing them
+// cannot break its reconciliation.
 export const DIRECT_BLOCK_CONFIG: Rule[] = [
-  { selector: '[class*="team-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="ranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="unranked-v2-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="team-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="ranked-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="unranked-matchmaking-layout_footer__"]', category: "multiplayer" },
-  { selector: '[class*="_footerEnter_"]', category: "multiplayer" },
-  { selector: '[class*="styles_friendChatButton__"]', category: "inGame" },
-  { selector: '[class*="_friendChatButton_"]', category: "inGame" },
-  { selector: '[class*="home_footer__"]', category: "home", url_paths: ["/"] },
-  { selector: '[class*="new-losp-footer_root__"]', category: "home", url_paths: ["/"] },
-  { selector: '[class*="footer_footer__"]', category: "home", url_paths: ["/"] },
-  { selector: '[class*="_footer_"]', category: "home", url_paths: ["/"] },
-  { selector: '[class*="home_editButtonWrapper__"]', category: "home" },
-  { selector: '[class*="pro-user-start-page_editButtonWrapper__"]', category: "home" },
-  { selector: '[class*="_editButtonWrapper_"]', category: "home" },
   { selector: 'iframe[name="__tcfapiLocator"]', category: "ads" },
   { selector: 'iframe[name="__uspapiLocator"]', category: "ads" },
   { selector: 'iframe[name="__adconsentLocator"]', category: "ads" },
@@ -39,6 +19,7 @@ export const DIRECT_BLOCK_CONFIG: Rule[] = [
   { selector: "#adconsent-usp-banner-btn", category: "ads" },
 ];
 
+// Hides without collapsing layout space.
 export const CSS_HIDING_SELECTORS: Rule[] = [
   {
     selector: '[class*="home_left__"], [class*="pro-user-start-page_left__"], [class*="_left_"]',
@@ -46,25 +27,41 @@ export const CSS_HIDING_SELECTORS: Rule[] = [
   },
 ];
 
-export const ANCESTOR_BLOCK_CONFIG: AncestorRule[] = [
+// React owns these nodes. Removing them makes React throw removeChild errors on
+// the next render (for example when a guess shows the round result), so they are
+// collapsed with CSS instead.
+export const CSS_COLLAPSE_SELECTORS: Rule[] = [
   {
-    selector: '[class*="_friendIcon_"]',
-    ancestor: '[class*="_contacts_"]',
+    selector:
+      '[class*="team-v2-matchmaking-layout_footer__"], [class*="ranked-v2-matchmaking-layout_footer__"], [class*="unranked-v2-matchmaking-layout_footer__"], [class*="team-matchmaking-layout_footer__"], [class*="ranked-matchmaking-layout_footer__"], [class*="unranked-matchmaking-layout_footer__"], [class*="_footerEnter_"]',
+    category: "multiplayer",
+  },
+  {
+    selector: '[class*="styles_friendChatButton__"], [class*="_friendChatButton_"]',
     category: "inGame",
   },
   {
-    selector: '[data-qa="pano-zoom-in"]',
-    ancestor: '[class*="_controlGroup_"]',
+    selector: '[class*="_contacts_"]:has([class*="_friendIcon_"])',
     category: "inGame",
   },
   {
-    selector: '[class*="widget_explorer__"]',
-    ancestor: '[class*="profile-v2_widgetRow__"]',
+    selector: '[class*="_controlGroup_"]:has([data-qa="pano-zoom-in"])',
+    category: "inGame",
+  },
+  {
+    selector:
+      '[class*="home_footer__"], [class*="new-losp-footer_root__"], [class*="footer_footer__"], [class*="_footer_"]',
+    category: "home",
+    url_paths: ["/"],
+  },
+  {
+    selector:
+      '[class*="home_editButtonWrapper__"], [class*="pro-user-start-page_editButtonWrapper__"], [class*="_editButtonWrapper_"]',
     category: "home",
   },
   {
-    selector: '[class*="_explorer_"]',
-    ancestor: '[class*="_widgetRow_"]',
+    selector:
+      '[class*="profile-v2_widgetRow__"]:has([class*="widget_explorer__"]), [class*="_widgetRow_"]:has([class*="_explorer_"])',
     category: "home",
   },
 ];

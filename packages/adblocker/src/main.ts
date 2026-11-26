@@ -3,7 +3,7 @@ import networkRules from "../network-rules.json";
 import { waitForAppReady } from "./app-ready.js";
 import { adblockerConfig } from "./config.js";
 import type { Category } from "./rules.js";
-import { ANCESTOR_BLOCK_CONFIG, CSS_HIDING_SELECTORS, DIRECT_BLOCK_CONFIG } from "./rules.js";
+import { CSS_COLLAPSE_SELECTORS, CSS_HIDING_SELECTORS, DIRECT_BLOCK_CONFIG } from "./rules.js";
 
 declare const __ADBLOCKER_VERSION__: string;
 
@@ -76,14 +76,17 @@ function isBlockedUrl(url: string | null): boolean {
 }
 
 function syncCss(): void {
-  const selectors = CSS_HIDING_SELECTORS.filter(
-    (rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths),
-  ).map((rule) => rule.selector);
+  const active = (rules: typeof CSS_HIDING_SELECTORS) =>
+    rules
+      .filter((rule) => categoryEnabled(rule.category) && pathMatches(rule.url_paths))
+      .map((rule) => rule.selector);
+  const hidden = active(CSS_HIDING_SELECTORS);
+  const collapsed = active(CSS_COLLAPSE_SELECTORS);
   const css = `${
-    selectors.length
-      ? `${selectors.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }`
+    hidden.length
+      ? `${hidden.join(", ")} { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }`
       : ""
-  }`;
+  }${collapsed.length ? `${collapsed.join(", ")} { display: none !important; }` : ""}`;
   const existing = document.getElementById("geoguessr-adblocker-style");
   if (existing) existing.textContent = css;
   else injectStyle("geoguessr-adblocker-style", css);
@@ -132,14 +135,6 @@ function blockElements(): void {
     if (!categoryEnabled(rule.category) || !pathMatches(rule.url_paths)) continue;
     for (const element of document.querySelectorAll(rule.selector)) {
       element.remove();
-      count++;
-    }
-  }
-
-  for (const rule of ANCESTOR_BLOCK_CONFIG) {
-    if (!categoryEnabled(rule.category)) continue;
-    for (const element of document.querySelectorAll(rule.selector)) {
-      element.closest(rule.ancestor)?.remove();
       count++;
     }
   }
